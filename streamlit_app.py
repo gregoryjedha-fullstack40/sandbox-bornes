@@ -613,7 +613,7 @@ with tab_top:
 
 with tab_ene2:
         
-        render_tab_energie(geojson)
+        render_tab_energie(geojson, database.charger_energie_population())
     
 
 

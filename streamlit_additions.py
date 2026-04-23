@@ -223,7 +223,7 @@ def render_tab_classement(arr_selectionnes=None):
 # Onglet qui croise le déficit avec la capacité réseau par arrondissement
 # ─────────────────────────────────────────────────────────────────────────────
 
-def render_tab_energie(geojson):
+def render_tab_energie(geojson, energie=None):
     st.markdown("### Soutenabilité réseau · à horizon 3 ans")
     st.markdown(
         "> Installer c'est bien — encore faut-il que le réseau suive. "
@@ -234,7 +234,8 @@ def render_tab_energie(geojson):
     if df is None:
         st.info("CSV des projections non trouvé (`energie_by_arrdt.csv`).")
         return
-
+    df_energie = energie.groupby("num_arrondissement").agg(conso_totale_mwh=("conso_totale_mwh", "sum"))
+    df_energie = df_energie["num_arrondissement","conso_totale_mwh"]
     scenarios = st.radio(
         "Scénario",
         options=["bas", "central", "haut"],
@@ -295,6 +296,7 @@ def render_tab_energie(geojson):
     with col_chart:
         st.markdown("#### Énergie additionnelle (MWh/an)")
         top_e = sub.sort_values("energie_add_mwh", ascending=False).head(10).copy()
+        top_e.merge(df_energie, left_on = "arr_num", right_on = "num_arrondissement", how="left")
         top_e["arr_label"] = top_e["arr_num"].apply(
             lambda n: f"{int(n)}{'er' if n == 1 else 'e'}")
         fig = px.bar(
@@ -306,6 +308,7 @@ def render_tab_energie(geojson):
             color_discrete_map={"VERT": "#2EF598", "AMBRE": "#FFD54F", "ROUGE": "#FF6B6B"},
             height=400,
             labels={"energie_add_mwh": "MWh / an", "arr_label": "Arrdt"},
+            text="energie_add_mwh - conso_totale_mwh"
         )
         fig.update_layout(
             margin=dict(l=0, r=0, t=10, b=0),
