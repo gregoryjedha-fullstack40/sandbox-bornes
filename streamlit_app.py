@@ -210,11 +210,11 @@ with k3:
 with k4:
     st.metric("Puissance moyenne", f"{puissance_moy:.0f} kW" if pd.notna(puissance_moy) else "N/A")
 
-tab_carte, tab_pression, tab_energie, tab_population, tab_proj, tab_top, tab_ene2 = st.tabs([
+tab_carte, tab_energie, tab_population, tab_pression, tab_proj, tab_top, tab_ene2 = st.tabs([
     "Répartition des bornes",
-    "Pression sur les équipements",
     "Consommation électrique",
     "Données démographiques",
+    "Pression sur les équipements",
     "Projection déficitaire",
     "Evolution déficit",
     "Soutenabilité réseau"
