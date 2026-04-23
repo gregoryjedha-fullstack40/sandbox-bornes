@@ -223,7 +223,7 @@ def render_tab_classement(arr_selectionnes=None):
 # Onglet qui croise le déficit avec la capacité réseau par arrondissement
 # ─────────────────────────────────────────────────────────────────────────────
 
-def render_tab_energie(geojson, energie=None):
+def render_tab_energie(geojson, df_nrj=None):
     st.markdown("### Soutenabilité réseau · à horizon 3 ans")
     st.markdown(
         "> Installer c'est bien — encore faut-il que le réseau suive. "
@@ -234,8 +234,18 @@ def render_tab_energie(geojson, energie=None):
     if df is None:
         st.info("CSV des projections non trouvé (`energie_by_arrdt.csv`).")
         return
-    df_energie = energie.groupby("num_arrondissement").agg(conso_totale_mwh=("conso_totale_mwh", "sum"))
-    df_energie = df_energie[["num_arrondissement","conso_totale_mwh"]]
+    if df_nrj is not None and not df_nrj.empty:
+                    df_nrj = df_nrj.copy()
+                # Forcer l'agrégation si nécessaire
+                    if len(df_nrj) > 20:
+                        df_nrj = df_nrj.groupby("num_arrondissement").agg(
+                            conso_totale_mwh=("conso_totale_mwh", "sum"),
+                            nb_sites=("nb_sites", "sum"),
+                            pop_total=("pop_total", "first"),
+                            nb_pdc=("nb_pdc", "first"),
+                            pression=("pression", "first"),
+                        ).reset_index()
+    df_nrj = df_nrj[["num_arrondissement","conso_totale_mwh"]]
     scenarios = st.radio(
         "Scénario",
         options=["bas", "central", "haut"],
@@ -295,7 +305,7 @@ def render_tab_energie(geojson, energie=None):
 
     with col_chart:
         st.markdown("#### Énergie additionnelle (MWh/an)")
-        sub = sub.merge(df_energie, left_on="arr_num", right_on="num_arrondissement", how="left")
+        sub = sub.merge(df_nrj, left_on="arr_num", right_on="num_arrondissement", how="left")
         top_e = sub.sort_values("energie_add_mwh", ascending=False).head(10).copy()
         
         top_e["arr_label"] = top_e["arr_num"].apply(
