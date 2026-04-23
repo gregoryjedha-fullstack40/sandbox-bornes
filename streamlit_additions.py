@@ -239,11 +239,7 @@ def render_tab_energie(geojson, df_nrj=None):
                 # Forcer l'agrégation si nécessaire
                     if len(df_nrj) > 20:
                         df_nrj = df_nrj.groupby("num_arrondissement").agg(
-                            conso_totale_mwh=("conso_totale_mwh", "sum"),
-                            nb_sites=("nb_sites", "sum"),
-                            pop_total=("pop_total", "first"),
-                            nb_pdc=("nb_pdc", "first"),
-                            pression=("pression", "first"),
+                            conso_totale_mwh=("conso_totale_mwh", "sum")
                         ).reset_index()
     df_nrj = df_nrj[["num_arrondissement","conso_totale_mwh"]]
     scenarios = st.radio(
