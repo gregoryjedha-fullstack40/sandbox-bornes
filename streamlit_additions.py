@@ -235,7 +235,7 @@ def render_tab_energie(geojson, energie=None):
         st.info("CSV des projections non trouvé (`energie_by_arrdt.csv`).")
         return
     df_energie = energie.groupby("num_arrondissement").agg(conso_totale_mwh=("conso_totale_mwh", "sum"))
-    df_energie = df_energie["num_arrondissement","conso_totale_mwh"]
+    df_energie = df_energie[["num_arrondissement","conso_totale_mwh"]]
     scenarios = st.radio(
         "Scénario",
         options=["bas", "central", "haut"],
