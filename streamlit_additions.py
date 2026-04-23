@@ -296,9 +296,14 @@ def render_tab_energie(geojson, energie=None):
     with col_chart:
         st.markdown("#### Énergie additionnelle (MWh/an)")
         top_e = sub.sort_values("energie_add_mwh", ascending=False).head(10).copy()
-        top_e.merge(df_energie, left_on = "arr_num", right_on = "num_arrondissement", how="left")
+        top_e = top_e.merge(df_energie, left_on="arr_num", right_on="num_arrondissement", how="left")
+        
         top_e["arr_label"] = top_e["arr_num"].apply(
             lambda n: f"{int(n)}{'er' if n == 1 else 'e'}")
+        top_e["text_label"] = top_e.apply(
+            lambda r: f"+{r['energie_add_mwh']:.0f} MWh (actuel: {r['conso_totale_mwh']:.0f})", axis=1
+        )
+        
         fig = px.bar(
             top_e,
             x="energie_add_mwh",
@@ -308,7 +313,7 @@ def render_tab_energie(geojson, energie=None):
             color_discrete_map={"VERT": "#2EF598", "AMBRE": "#FFD54F", "ROUGE": "#FF6B6B"},
             height=400,
             labels={"energie_add_mwh": "MWh / an", "arr_label": "Arrdt"},
-            text="energie_add_mwh - conso_totale_mwh"
+            text="text_label",
         )
         fig.update_layout(
             margin=dict(l=0, r=0, t=10, b=0),
