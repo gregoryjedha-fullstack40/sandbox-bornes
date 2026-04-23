@@ -295,15 +295,12 @@ def render_tab_energie(geojson, energie=None):
 
     with col_chart:
         st.markdown("#### Énergie additionnelle (MWh/an)")
+        sub = sub.merge(df_energie, left_on="arr_num", right_on="num_arrondissement", how="left")
         top_e = sub.sort_values("energie_add_mwh", ascending=False).head(10).copy()
-        top_e = top_e.merge(df_energie, left_on="arr_num", right_on="num_arrondissement", how="left")
         
         top_e["arr_label"] = top_e["arr_num"].apply(
             lambda n: f"{int(n)}{'er' if n == 1 else 'e'}")
-        top_e["text_label"] = top_e.apply(
-            lambda r: f"+{r['energie_add_mwh']:.0f} MWh (actuel: {r['conso_totale_mwh']:.0f})", axis=1
-        )
-        
+        top_e["text_label"] = top_e.apply(lambda r: f"+{r['energie_add_mwh'] / r['conso_totale_mwh'] * 100:.1f}% vs aujourd'hui" if r['conso_totale_mwh'] > 0 else "N/A",axis=1)
         fig = px.bar(
             top_e,
             x="energie_add_mwh",
