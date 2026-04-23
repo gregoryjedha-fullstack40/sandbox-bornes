@@ -1,5 +1,5 @@
 ---
-title: Sandbox Bornes
+title: Paris Bornes
 emoji: 🚀
 colorFrom: red
 colorTo: red
@@ -8,7 +8,7 @@ app_port: 8501
 tags:
 - streamlit
 pinned: false
-short_description: Streamlit template space
+short_description: Prioriser les zones d'installation des bornes de recharge
 ---
 
 # Welcome to Streamlit!
