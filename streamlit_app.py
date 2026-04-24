@@ -189,6 +189,10 @@ with st.sidebar:
             
             st.rerun()
 
+    st.markdown("---")
+    if st.button("📍 Recommandations DBSCAN", use_container_width=True):
+        st.switch_page("pages/recommandations.py")
+
 
 # Entête et KPIs
 st.markdown("# ⚡ Bornes de recharge VE — Paris")
@@ -613,7 +617,7 @@ with tab_top:
 
 with tab_ene2:
         
-        render_tab_energie(geojson, energie)
+        render_tab_energie(geojson, data.get("energie_pop_pression"))
     
 
 
