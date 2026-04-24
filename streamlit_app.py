@@ -17,7 +17,6 @@ from streamlit_additions import (
     render_tab_energie,
 )
 
-# set_page_config DOIT être le premier appel Streamlit
 st.set_page_config(
     page_title="Bornes VE Paris",
     page_icon="⚡",
@@ -25,8 +24,67 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+st.markdown("""
+<style>
+    /* Responsive : empêcher le débordement horizontal */
+    .main .block-container {
+        max-width: 100%;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    
+    /* Mobile : colonnes empilées au lieu d'être côte à côte */
+    @media (max-width: 768px) {
+        /* Empiler les colonnes */
+        [data-testid="stHorizontalBlock"] {
+            flex-wrap: wrap;
+        }
+        [data-testid="stHorizontalBlock"] > div {
+            width: 100% !important;
+            flex: 100% !important;
+        }
+        
+        /* Réduire les marges */
+        .main .block-container {
+            padding-left: 0.5rem;
+            padding-right: 0.5rem;
+        }
+        
+        /* Sidebar pleine largeur quand ouverte */
+        section[data-testid="stSidebar"] {
+            width: 100% !important;
+        }
+        
+        /* KPI cards plus compacts */
+        [data-testid="stMetric"] {
+            padding: 0.3rem;
+        }
+        
+        /* Tabs scrollables */
+        .stTabs [data-baseweb="tab-list"] {
+            overflow-x: auto;
+            flex-wrap: nowrap;
+        }
+        .stTabs [data-baseweb="tab"] {
+            font-size: 0.8rem;
+            white-space: nowrap;
+        }
+    }
+    
+    /* Tablette */
+    @media (max-width: 1024px) and (min-width: 769px) {
+        [data-testid="stHorizontalBlock"] > div {
+            min-width: 45% !important;
+        }
+    }
+</style>
+""", unsafe_allow_html=True)
+
+def hauteur_graphique(desktop=600, mobile=350):
+    """Retourne la hauteur adaptée à l'écran"""
+    return desktop
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-filterable_values = True
 
 if not os.path.exists(os.path.join(BASE_DIR, "bornes.db")):
     os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
@@ -255,8 +313,7 @@ with tab_carte:
         ["Disponibilité", "Puissance", "Choroplèthe"],
         horizontal=True,
     )
-    filterable_values = True
-    
+        
     if vue == "Disponibilité":
         couleurs_statuts = {
             "Disponible": "#119900",
@@ -287,7 +344,7 @@ with tab_carte:
             },
         )
         fig.update_layout(mapbox_style="open-street-map", margin=dict(l=0, r=0, t=0, b=0))
-        st.plotly_chart(fig, width='stretch')
+        st.plotly_chart(fig, width='stretch', config={"responsive": True})
     
     elif vue == "Puissance":
         df_puissance = df_puissance.copy()
@@ -309,7 +366,7 @@ with tab_carte:
             zoom=11, height=700,
         )
         fig.update_layout(mapbox_style="open-street-map", margin=dict(l=0, r=0, t=0, b=0))
-        st.plotly_chart(fig, width='stretch')
+        st.plotly_chart(fig, width='stretch', config={"responsive": True})
     
     elif vue == "Choroplèthe" and geojson:
         taux = df_filtre.groupby("num_arrondissement").agg(
@@ -338,7 +395,7 @@ with tab_carte:
             },
         )
         fig.update_layout(mapbox_style="open-street-map", margin=dict(l=0, r=0, t=0, b=0))
-        st.plotly_chart(fig, width='stretch')
+        st.plotly_chart(fig, width='stretch', config={"responsive": True})
  
  
 with tab_pression:
@@ -374,7 +431,7 @@ with tab_pression:
                 },
             )
             fig.update_layout(mapbox_style="open-street-map", margin=dict(l=0, r=0, t=0, b=0))
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, width='stretch', config={"responsive": True})
         
         with col_classement:
             df_display = df_pression[["num_arrondissement", "nb_ve", "pression"]].copy()
@@ -436,7 +493,7 @@ with tab_energie:
                     },
                 )
                 fig_nrj.update_layout(mapbox_style="open-street-map", margin=dict(l=0, r=0, t=0, b=0))
-                st.plotly_chart(fig_nrj, width='stretch')
+                st.plotly_chart(fig_nrj, width='stretch', config={"responsive": True})
             
             with col_pression_energie:
                 df_nrj = data.get("energie_pop_pression")
@@ -478,11 +535,11 @@ with tab_energie:
                 margin=dict(l=0, r=60, t=10, b=0),
                 plot_bgcolor="rgba(0,0,0,0)",
             )
-            st.plotly_chart(fig_bar, use_container_width=True)
+            st.plotly_chart(fig_bar, use_container_width=True, config={"responsive": True})
         
         with col_g2:
             st.markdown("#### MWh par habitant")
-            df_sorted2 = df_nrj.sort_values("mwh_par_habitant", ascending=True)
+            df_sorted2 = df_nrj.sort_values("mwh_par_habitant", ascending=True, config={"responsive": True})
             fig_bar2 = go.Figure(go.Bar(
                 x=df_sorted2["mwh_par_habitant"],
                 y=df_sorted2["label"],
@@ -498,7 +555,7 @@ with tab_energie:
                 margin=dict(l=0, r=60, t=10, b=0),
                 plot_bgcolor="rgba(0,0,0,0)",
             )
-            st.plotly_chart(fig_bar2, use_container_width=True)
+            st.plotly_chart(fig_bar2, use_container_width=True, config={"responsive": True})
 
     
 with tab_population:
@@ -558,7 +615,7 @@ with tab_population:
                 yaxis=dict(gridcolor="rgba(200,200,200,0.3)"),
             )
 
-            st.plotly_chart(fig_bar, width='stretch')
+            st.plotly_chart(fig_bar, width='stretch', config={"responsive": True})
 
         with col_carte:
             st.markdown("#### Part des majeurs par arrondissement")
@@ -589,7 +646,7 @@ with tab_population:
                 mapbox_style="open-street-map",
                 margin=dict(l=0, r=0, t=0, b=0),
             )
-            st.plotly_chart(fig_map, width='stretch')
+            st.plotly_chart(fig_map, width='stretch', config={"responsive": True})
 
         st.markdown("---")
         st.markdown("#### Détail par arrondissement")
