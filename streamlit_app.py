@@ -471,8 +471,7 @@ with tab_energie:
         if df_nrj.empty:
             st.info("Aucune donnée de consommation pour les arrondissements sélectionnés.")
         else:
-            col_carte_energie, col_pression_energie = st.columns(2)
-            with col_carte_energie:
+            with st.container():
                 fig_nrj = px.choropleth_map(
                     df_nrj, geojson=geojson,
                     locations="num_arrondissement",
@@ -495,7 +494,6 @@ with tab_energie:
                 fig_nrj.update_layout(mapbox_style="open-street-map", margin=dict(l=0, r=0, t=0, b=0))
                 st.plotly_chart(fig_nrj, width='stretch', config={"responsive": True})
             
-            with col_pression_energie:
                 df_nrj = data.get("energie_pop_pression")
                 if df_nrj is not None and not df_nrj.empty:
                     df_nrj = df_nrj[df_nrj["num_arrondissement"].isin(arr_selectionnes)].copy()
@@ -514,48 +512,47 @@ with tab_energie:
                             lambda x: f"{x}er" if x == 1 else f"{x}e"
                         )
         
-        # Deux bar charts côte à côte
-        col_g1, col_g2 = st.columns(2)
-        
-        with col_g1:
-            st.markdown("#### Consommation par arrondissement")
-            df_sorted = df_nrj.sort_values("conso_totale_mwh", ascending=True)
-            fig_bar = go.Figure(go.Bar(
-                x=df_sorted["conso_totale_mwh"],
-                y=df_sorted["label"],
-                orientation="h",
-                marker_color=df_sorted["conso_totale_mwh"],
-                marker_colorscale="YlOrRd",
-                text=df_sorted["conso_totale_mwh"].apply(lambda x: f"{x:,.0f}"),
-                textposition="outside",
-            ))
-            fig_bar.update_layout(
-                height=500,
-                xaxis_title="MWh",
-                margin=dict(l=0, r=60, t=10, b=0),
-                plot_bgcolor="rgba(0,0,0,0)",
-            )
-            st.plotly_chart(fig_bar, width='stretch', config={"responsive": True})
-        
-        with col_g2:
-            st.markdown("#### MWh par habitant")
-            df_sorted2 = df_nrj.sort_values("mwh_par_habitant", ascending=True)
-            fig_bar2 = go.Figure(go.Bar(
-                x=df_sorted2["mwh_par_habitant"],
-                y=df_sorted2["label"],
-                orientation="h",
-                marker_color=df_sorted2["mwh_par_habitant"],
-                marker_colorscale="YlOrRd",
-                text=df_sorted2["mwh_par_habitant"].apply(lambda x: f"{x:.2f}"),
-                textposition="outside",
-            ))
-            fig_bar2.update_layout(
-                height=500,
-                xaxis_title="MWh / habitant",
-                margin=dict(l=0, r=60, t=10, b=0),
-                plot_bgcolor="rgba(0,0,0,0)",
-            )
-            st.plotly_chart(fig_bar2, width='stretch', config={"responsive": True})
+            # Deux bar charts côte à côte
+            col_g1, col_g2 = st.columns(2)
+            with col_g1:
+                st.markdown("#### Consommation par arrondissement")
+                df_sorted = df_nrj.sort_values("conso_totale_mwh", ascending=True)
+                fig_bar = go.Figure(go.Bar(
+                    x=df_sorted["conso_totale_mwh"],
+                    y=df_sorted["label"],
+                    orientation="h",
+                    marker_color=df_sorted["conso_totale_mwh"],
+                    marker_colorscale="YlOrRd",
+                    text=df_sorted["conso_totale_mwh"].apply(lambda x: f"{x:,.0f}"),
+                    textposition="outside",
+                ))
+                fig_bar.update_layout(
+                    height=500,
+                    xaxis_title="MWh",
+                    margin=dict(l=0, r=60, t=10, b=0),
+                    plot_bgcolor="rgba(0,0,0,0)",
+                )
+                st.plotly_chart(fig_bar, width='stretch', config={"responsive": True})
+            
+            with col_g2:
+                st.markdown("#### MWh par habitant")
+                df_sorted2 = df_nrj.sort_values("mwh_par_habitant", ascending=True)
+                fig_bar2 = go.Figure(go.Bar(
+                    x=df_sorted2["mwh_par_habitant"],
+                    y=df_sorted2["label"],
+                    orientation="h",
+                    marker_color=df_sorted2["mwh_par_habitant"],
+                    marker_colorscale="YlOrRd",
+                    text=df_sorted2["mwh_par_habitant"].apply(lambda x: f"{x:.2f}"),
+                    textposition="outside",
+                ))
+                fig_bar2.update_layout(
+                    height=500,
+                    xaxis_title="MWh / habitant",
+                    margin=dict(l=0, r=60, t=10, b=0),
+                    plot_bgcolor="rgba(0,0,0,0)",
+                )
+                st.plotly_chart(fig_bar2, width='stretch', config={"responsive": True})
 
     
 with tab_population:

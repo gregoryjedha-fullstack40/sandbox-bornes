@@ -27,7 +27,7 @@ with open(geojson_path, "r", encoding="utf-8") as f:
 # Paramètres dans la sidebar
 with st.sidebar:
     st.markdown("## Paramètres DBSCAN")
-    distance_max = st.slider("Distance min sans borne (m)", 50, 100, 200, 400, 150, step=50)
+    distance_max = st.slider("Distance min sans borne (m)", 50, 800, 50)
     min_bornes_cluster = st.slider("Bornes min par cluster", 2, 10, 3)
 
 # DBSCAN
