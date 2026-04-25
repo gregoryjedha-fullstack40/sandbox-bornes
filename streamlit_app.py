@@ -406,9 +406,8 @@ with tab_pression:
         st.markdown("Pression = Nombre de véhicules électriques immatriculés / Nombre de points de charge.")
         st.markdown("Plus la pression est élevée, plus l'arrondissement est sous-équipé.")
         
-        col_carte, col_classement = st.columns([3, 2])
         
-        with col_carte:
+        with st.container():
             df_pression = pression.copy()
             df_pression["num_arrondissement"] = df_pression["num_arrondissement"].astype(int)
             
@@ -430,24 +429,24 @@ with tab_pression:
                     "nb_ve": "Véhicules électriques",
                 },
             )
+
             fig.update_layout(mapbox_style="open-street-map", margin=dict(l=0, r=0, t=0, b=0))
             st.plotly_chart(fig, width='stretch', config={"responsive": True})
         
-        with col_classement:
             df_display = df_pression[["num_arrondissement", "nb_ve", "pression"]].copy()
             df_display.columns = ["Arrondissement", "Nombre VE", "Pression actuelle"]
             df_display = df_display.sort_values("Pression actuelle", ascending=True).reset_index(drop=True)
 
-        st.dataframe(
-            df_display.style.format({
-                "Arrondissement": "{:,.0f}",
-                "Nombre VE": "{:,.0f}",
-                "Pression": "{:,.2f}",
-            }).background_gradient(subset=["Pression actuelle"], cmap="Accent"),
-            width='stretch',
-            height='content',
-            hide_index=True,
-        )
+            st.dataframe(
+                df_display.style.format({
+                    "Arrondissement": "{:,.0f}",
+                    "Nombre VE": "{:,.0f}",
+                    "Pression": "{:,.2f}",
+                }).background_gradient(subset=["Pression actuelle"], cmap="Accent"),
+                width='stretch',
+                height='content',
+                hide_index=True,
+            )
 
     
     else:

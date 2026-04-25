@@ -1,137 +1,375 @@
+"""
+recommandations.py — Zones recommandées pour de nouvelles bornes VE à Paris
+Analyse DBSCAN : identification des zones sous-couvertes croisées avec la pression VE.
+"""
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
 import json
 import os
-import database
+import sys
 
-import streamlit as st
+# Ajouter le dossier parent au path pour importer database
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+import database
 
 st.set_page_config(page_title="Recommandations DBSCAN", page_icon="📍", layout="wide")
 
+# Bouton retour
 if st.button("← Retour au dashboard"):
     st.switch_page("streamlit_app.py")
 
 st.markdown("# 📍 Zones recommandées pour de nouvelles bornes")
-st.markdown("> Analyse DBSCAN : identification des zones sous-couvertes croisées avec la pression VE.")
+st.markdown(
+    "> Analyse DBSCAN : identification des zones sous-couvertes à Paris, "
+    "croisées avec la pression VE par arrondissement. "
+    "Seuls les emplacements **intra-muros** sont considérés."
+)
 
-# Charger les données
-bornes = pd.read_sql("SELECT * FROM bornes", database.get_engine())
-pression = pd.read_sql("SELECT * FROM pression", database.get_engine())
 
-geojson_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "arrondissements.geojson")
-with open(geojson_path, "r", encoding="utf-8") as f:
-    geojson = json.load(f)
+# ─── Chargement des données ───
 
-# Paramètres dans la sidebar
+@st.cache_data(ttl=300)
+def charger_bornes():
+    engine = database.get_engine()
+    df = pd.read_sql("SELECT * FROM bornes", engine)
+    df["num_arrondissement"] = pd.to_numeric(df["num_arrondissement"], errors="coerce")
+    df = df.dropna(subset=["num_arrondissement", "latitude", "longitude"])
+    df["num_arrondissement"] = df["num_arrondissement"].astype(int)
+    return df
+
+
+@st.cache_data(ttl=300)
+def charger_pression():
+    engine = database.get_engine()
+    df = pd.read_sql("SELECT * FROM pression", engine)
+    df["num_arrondissement"] = df["num_arrondissement"].astype(int)
+    return df
+
+
+@st.cache_data(ttl=3600)
+def charger_geojson():
+    geojson_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "arrondissements.geojson")
+    if os.path.exists(geojson_path):
+        with open(geojson_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return None
+
+
+bornes = charger_bornes()
+pression = charger_pression()
+geojson = charger_geojson()
+
+if bornes.empty or pression.empty or geojson is None:
+    st.error("Données manquantes. Lancez d'abord l'ETL pour alimenter la base.")
+    st.stop()
+
+
+# ─── Paramètres dans la sidebar ───
+
 with st.sidebar:
     st.markdown("## Paramètres DBSCAN")
-    distance_max = st.slider("Distance min sans borne (m)", 50, 800, 50)
-    min_bornes_cluster = st.slider("Bornes min par cluster", 2, 10, 3)
+    
+    distance_max = st.slider(
+        "Distance min sans borne (m)",
+        min_value=200, max_value=800, value=300, step=50,
+        help="Seuil en dessous duquel on considère qu'une zone est déjà couverte."
+    )
+    
+    min_bornes_cluster = st.slider(
+        "Bornes min par cluster",
+        min_value=2, max_value=10, value=3,
+        help="Nombre minimum de bornes pour former un cluster DBSCAN."
+    )
+    
+    poids_pression = st.slider(
+        "Poids pression vs couverture",
+        min_value=0.0, max_value=1.0, value=0.6, step=0.1,
+        help="0 = seule la distance compte, 1 = seule la pression compte."
+    )
+    
+    resolution = st.select_slider(
+        "Résolution de la grille",
+        options=[0.002, 0.003, 0.004, 0.005],
+        value=0.003,
+        format_func=lambda x: f"~{int(x * 6_371_000)}m",
+        help="Espacement entre les points candidats."
+    )
+    
+    nb_resultats = st.slider(
+        "Nombre de résultats affichés",
+        min_value=10, max_value=100, value=50, step=10,
+    )
 
-# DBSCAN
+
+# ─── Étape 1 : Grille intra-muros ───
+# On ne génère des points candidats QUE à l'intérieur des arrondissements parisiens.
+# Cela évite de recommander des emplacements à Vincennes, Suresnes, etc.
+
+from shapely.geometry import Point, shape
+
+@st.cache_data(ttl=3600)
+def generer_grille_paris(_geojson, resolution):
+    """Génère une grille de points uniquement à l'intérieur de Paris."""
+    polygones = []
+    for feature in _geojson["features"]:
+        poly = shape(feature["geometry"])
+        arr_num = feature["properties"]["c_ar"]
+        polygones.append((arr_num, poly))
+    
+    lat_min, lat_max = 48.815, 48.905
+    lon_min, lon_max = 2.22, 2.47
+    
+    lats = np.arange(lat_min, lat_max, resolution)
+    lons = np.arange(lon_min, lon_max, resolution)
+    
+    points = []
+    for lat in lats:
+        for lon in lons:
+            p = Point(lon, lat)
+            for arr_num, poly in polygones:
+                if poly.contains(p):
+                    points.append({
+                        "latitude": lat,
+                        "longitude": lon,
+                        "num_arrondissement": arr_num,
+                    })
+                    break
+    
+    return pd.DataFrame(points)
+
+
+with st.spinner("Génération de la grille intra-muros..."):
+    grille = generer_grille_paris(geojson, resolution)
+
+
+# ─── Étape 2 : DBSCAN sur les bornes existantes ───
+# On identifie les clusters de bornes (zones bien couvertes)
+# et les points de bruit (bornes isolées).
+
 from sklearn.cluster import DBSCAN
 from sklearn.neighbors import BallTree
 
-coords = bornes[["latitude", "longitude"]].dropna().values
+coords = bornes[["latitude", "longitude"]].values
 coords_rad = np.radians(coords)
 
-db = DBSCAN(eps=0.0015, min_samples=min_bornes_cluster, metric="haversine")
+# eps en radians : distance_max en mètres / rayon Terre
+eps_rad = distance_max / 6_371_000
+
+db = DBSCAN(eps=eps_rad, min_samples=min_bornes_cluster, metric="haversine")
 bornes_clusters = db.fit_predict(coords_rad)
 
-nb_clusters = len(set(bornes_clusters))
+nb_clusters = len(set(bornes_clusters)) - (1 if -1 in bornes_clusters else 0)
 nb_bruit = (bornes_clusters == -1).sum()
 
-# Grille de points candidats
-lat_min, lat_max = 48.815, 48.905
-lon_min, lon_max = 2.22, 2.47
-resolution = 0.003
 
-lats = np.arange(lat_min, lat_max, resolution)
-lons = np.arange(lon_min, lon_max, resolution)
-grille = np.array([(lat, lon) for lat in lats for lon in lons])
+# ─── Étape 3 : Distance de chaque point candidat à la borne la plus proche ───
 
 tree = BallTree(coords_rad, metric="haversine")
-distances, _ = tree.query(np.radians(grille), k=1)
-distances_m = distances.flatten() * 6_371_000
+distances, _ = tree.query(np.radians(grille[["latitude", "longitude"]].values), k=1)
 
-candidats = pd.DataFrame({
-    "latitude": grille[:, 0],
-    "longitude": grille[:, 1],
-    "distance_borne_m": distances_m.round(0),
-})
-candidats = candidats[candidats["distance_borne_m"] > distance_max]
+# Conversion radians → mètres (rayon Terre = 6 371 000 m)
+grille["distance_borne_m"] = (distances.flatten() * 6_371_000).round(0)
 
-# Trouver l'arrondissement de chaque candidat
-from shapely.geometry import Point, shape
 
-def trouver_arrondissement(lat, lon):
-    point = Point(lon, lat)
-    for feature in geojson["features"]:
-        if shape(feature["geometry"]).contains(point):
-            return feature["properties"]["c_ar"]
-    return None
+# ─── Étape 4 : Score de priorité pondéré ───
+# On croise la couverture spatiale (distance) avec la demande (pression VE/borne).
+# Pondération configurable : par défaut 60% pression, 40% distance.
 
-candidats["num_arrondissement"] = candidats.apply(
-    lambda r: trouver_arrondissement(r["latitude"], r["longitude"]), axis=1
-)
-candidats = candidats.dropna(subset=["num_arrondissement"])
-candidats["num_arrondissement"] = candidats["num_arrondissement"].astype(int)
-
-# Croiser avec la pression
-candidats = candidats.merge(
-    pression[["num_arrondissement", "pression"]],
+grille = grille.merge(
+    pression[["num_arrondissement", "pression", "nb_ve", "nb_pdc"]],
     on="num_arrondissement",
     how="left",
 )
-candidats["score_priorite"] = (candidats["distance_borne_m"] * candidats["pression"]).round(0)
+
+# Filtrer : garder uniquement les zones à plus de distance_max d'une borne
+candidats = grille[grille["distance_borne_m"] > distance_max].copy()
+
+if candidats.empty:
+    st.success(f"Toutes les zones de Paris sont couvertes à moins de {distance_max}m d'une borne.")
+    st.stop()
+
+# Normaliser les deux scores entre 0 et 1
+candidats["score_couverture"] = (
+    candidats["distance_borne_m"] / candidats["distance_borne_m"].max()
+).round(3)
+
+candidats["score_pression"] = (
+    candidats["pression"] / candidats["pression"].max()
+).round(3)
+
+# Score final pondéré
+candidats["score_priorite"] = (
+    (1 - poids_pression) * candidats["score_couverture"]
+    + poids_pression * candidats["score_pression"]
+).round(3)
+
 candidats = candidats.sort_values("score_priorite", ascending=False)
 
+# Label arrondissement
+candidats["arr_label"] = candidats["num_arrondissement"].apply(
+    lambda x: f"{int(x)}{'er' if x == 1 else 'e'} arr."
+)
+
+
+# ─── Affichage ───
+
 # KPIs
-k1, k2, k3 = st.columns(3)
+k1, k2, k3, k4 = st.columns(4)
 with k1:
     st.metric("Clusters de bornes", nb_clusters)
 with k2:
     st.metric("Bornes isolées", nb_bruit)
 with k3:
     st.metric("Zones candidates", len(candidats))
+with k4:
+    top_arr = candidats.groupby("num_arrondissement").size().idxmax()
+    st.metric("Arrdt le plus sous-couvert", f"{top_arr}e")
+
+# Explication des poids
+st.info(
+    f"**Pondération actuelle** : {int(poids_pression * 100)}% pression (demande VE) "
+    f"+ {int((1 - poids_pression) * 100)}% couverture (distance). "
+    f"Ajustez le curseur dans la barre latérale."
+)
 
 # Carte
-top = candidats.head(50)
+st.markdown("### Carte des emplacements prioritaires")
+
+top = candidats.head(nb_resultats)
 
 fig = px.scatter_map(
-    top, lat="latitude", lon="longitude",
+    top,
+    lat="latitude",
+    lon="longitude",
     color="score_priorite",
     size="distance_borne_m",
     color_continuous_scale="YlOrRd",
-    zoom=12, height=700,
+    zoom=12,
+    height=650,
     hover_data={
-        "num_arrondissement": True,
+        "arr_label": True,
         "distance_borne_m": True,
         "pression": True,
+        "nb_ve": True,
+        "nb_pdc": True,
+        "score_couverture": True,
+        "score_pression": True,
         "score_priorite": True,
+        "latitude": False,
+        "longitude": False,
     },
     labels={
+        "arr_label": "Arrondissement",
         "distance_borne_m": "Distance borne la + proche (m)",
         "pression": "Pression VE/borne",
-        "score_priorite": "Score priorité",
-        "num_arrondissement": "Arrondissement",
+        "nb_ve": "VE dans l'arrondissement",
+        "nb_pdc": "Bornes dans l'arrondissement",
+        "score_couverture": "Score couverture",
+        "score_pression": "Score pression",
+        "score_priorite": "Score final",
     },
 )
-fig.update_layout(mapbox_style="open-street-map", margin=dict(l=0, r=0, t=0, b=0))
-st.plotly_chart(fig, width='stretch')
-
-# Tableau
-st.markdown("### Top 20 emplacements prioritaires")
-st.dataframe(
-    candidats.head(20)[["num_arrondissement", "latitude", "longitude", "distance_borne_m", "pression", "score_priorite"]]
-    .rename(columns={
-        "num_arrondissement": "Arrdt",
-        "distance_borne_m": "Distance (m)",
-        "pression": "Pression",
-        "score_priorite": "Score",
-    }),
-    width='stretch',
-    hide_index=True,
+fig.update_layout(
+    mapbox_style="open-street-map",
+    margin=dict(l=0, r=0, t=0, b=0),
 )
+st.plotly_chart(fig, width='stretch', config={"responsive": True})
+
+# Répartition par arrondissement
+col_bar, col_table = st.columns([3, 2])
+
+with col_bar:
+    st.markdown("### Zones candidates par arrondissement")
+    par_arr = (
+        candidats.groupby(["num_arrondissement", "arr_label"])
+        .agg(
+            nb_zones=("score_priorite", "count"),
+            score_moyen=("score_priorite", "mean"),
+            distance_max=("distance_borne_m", "max"),
+        )
+        .reset_index()
+        .sort_values("nb_zones", ascending=True)
+    )
+    
+    fig_bar = px.bar(
+        par_arr,
+        x="nb_zones",
+        y="arr_label",
+        orientation="h",
+        color="score_moyen",
+        color_continuous_scale="YlOrRd",
+        height=500,
+        text="nb_zones",
+        labels={
+            "nb_zones": "Zones à équiper",
+            "arr_label": "",
+            "score_moyen": "Score moyen",
+        },
+    )
+    fig_bar.update_traces(textposition="outside")
+    fig_bar.update_layout(margin=dict(l=0, r=40, t=10, b=0), showlegend=False)
+    st.plotly_chart(fig_bar, use_container_width=True, config={"responsive": True})
+
+with col_table:
+    st.markdown("### Top 20 emplacements")
+    st.dataframe(
+        candidats.head(20)[[
+            "arr_label", "latitude", "longitude",
+            "distance_borne_m", "pression", "score_priorite",
+        ]]
+        .rename(columns={
+            "arr_label": "Arrdt",
+            "distance_borne_m": "Distance (m)",
+            "pression": "Pression",
+            "score_priorite": "Score",
+        })
+        .style.background_gradient(subset=["Score"], cmap="YlOrRd")
+        .format({
+            "Distance (m)": "{:.0f}",
+            "Pression": "{:.1f}",
+            "Score": "{:.3f}",
+            "latitude": "{:.4f}",
+            "longitude": "{:.4f}",
+        }),
+        width='stretch',
+        hide_index=True,
+        height=500,
+    )
+
+
+# ─── Méthodologie ───
+
+with st.expander("📝 Méthodologie DBSCAN"):
+    st.markdown(f"""
+    **Algorithme** : DBSCAN (Density-Based Spatial Clustering of Applications with Noise)
+    
+    **Paramètres** :
+    - `eps` = {distance_max}m (converti en {eps_rad:.6f} radians)
+    - `min_samples` = {min_bornes_cluster} bornes minimum par cluster
+    - Métrique = haversine (distance sur la surface terrestre)
+    
+    **Pourquoi haversine ?**
+    Les coordonnées GPS sont sur une sphère. L'euclidienne traiterait 1° de latitude (111 km) 
+    et 1° de longitude (~73 km à Paris) comme identiques, faussant les distances de 34%.
+    Haversine donne directement des distances en mètres.
+    
+    **Pourquoi {distance_max}m ?**
+    C'est la distance moyenne de marche qu'un conducteur accepte entre son stationnement 
+    et une borne de recharge (source : AVERE France). En dessous, la zone est considérée couverte.
+    
+    **Score de priorité** :
+    - Score couverture (distance normalisée) × {int((1 - poids_pression) * 100)}%
+    - Score pression (VE/borne normalisé) × {int(poids_pression * 100)}%
+    
+    **Filtrage intra-muros** :
+    La grille de points candidats est contrainte aux polygones des 20 arrondissements 
+    via Shapely, excluant les communes limitrophes (Vincennes, Boulogne, etc.).
+    
+    **Résultats** :
+    - {nb_clusters} clusters de bornes identifiés
+    - {nb_bruit} bornes isolées (hors cluster)
+    - {len(candidats)} zones candidates à plus de {distance_max}m d'une borne
+    """)
