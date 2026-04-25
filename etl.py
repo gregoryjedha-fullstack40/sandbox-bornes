@@ -241,7 +241,7 @@ def recuperer_statuts_pdc_gireve(force=False):
         maintenant = maintenant.replace(hour=maintenant.hour - 2)
     else:
         maintenant = (maintenant - timedelta(days=1)).replace(hour=23)
-    plus_tot = maintenant - timedelta(minutes=1)
+    plus_tot = maintenant - timedelta(minutes=5)
     fromdate = plus_tot.strftime("%Y-%m-%dT%H:%M:%S")
     todate = maintenant.strftime("%Y-%m-%dT%H:%M:%S")
     data = collect_data(source="irve_dyn",fromdate=fromdate,todate=todate,force=force)

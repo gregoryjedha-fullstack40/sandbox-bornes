@@ -117,18 +117,18 @@ def render_tab_projection(geojson, arr_selectionnes=None):
             st.info("GeoJSON des arrondissements non disponible.")
 
     with col_classement:
-        st.markdown("#### Top 10 à équiper en priorité")
-        top = sub.sort_values("deficit_bornes", ascending=False).head(10).copy()
+        st.markdown("#### Top 5 à équiper en priorité")
+        top = sub.sort_values("pression_projetee", ascending=False).head(5).copy()
         top["arr_label"] = top["arr_num"].apply(
             lambda n: f"{int(n)}{'er' if n == 1 else 'e'} arr."
         )
         st.dataframe(
-            top[["arr_label", "deficit_bornes", "ve_projete", "pression_projetee"]]
+            top[["arr_label", "pression_projetee", "ve_projete", "deficit_bornes"]]
             .rename(columns={
                 "arr_label": "Arrdt",
-                "deficit_bornes": "Déficit",
-                "ve_projete": "VE projetés",
                 "pression_projetee": "Pression",
+                "ve_projete": "VE projetés",
+                "deficit_bornes": "Déficit"
             })
             .reset_index(drop=True),
             width='stretch',
