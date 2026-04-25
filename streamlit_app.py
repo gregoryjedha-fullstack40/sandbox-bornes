@@ -221,6 +221,7 @@ with st.sidebar:
         energie["num_arrondissement"] = energie["num_arrondissement"].astype(int)
         energie = energie[energie["num_arrondissement"].isin(arr_selectionnes)]
 
+    st.markdown("---")
 
     if st.button("🔄 Rafraîchir les statuts", width='stretch'):
             with st.spinner("Mise à jour des statuts en cours..."):
@@ -250,8 +251,9 @@ with st.sidebar:
     if st.button("🔄 Mise à jour des datasets", width='stretch'):
             with st.spinner("Mise à jour de la base de données en cours..."):
                 from etl import force_reimport
-                force_reimport()
-                st.rerun()
+                from tqdm import tqdm
+                st.text(tqdm.tqdm(force_reimport()))
+                st.cache_data.clear().rerun()
     
     st.markdown("---")
 

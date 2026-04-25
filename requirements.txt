@@ -13,3 +13,4 @@ streamlit-folium>=0.20
 branca>=0.7
 shapely
 scikit-learn
+tqdm

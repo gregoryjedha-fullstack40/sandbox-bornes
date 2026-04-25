@@ -352,13 +352,14 @@ def recuperer_population():
 
 def force_reimport():
     import database
-    from bornes_arrondissements import calculer_pression
+    from bornes_arrondissements import calculer_pression, calculer_projections
     population = recuperer_population()
     stations_belib = recuperer_liste_stations_belib(True)
     stations_gireve = recuperer_liste_stations_gireve(True)
     listestations = fusionner_sources(stations_belib, stations_gireve)
     listestations.to_csv("./data/stations_paris.csv", index=False)
     liste_ve = recuperer_vehicules_electriques()
+    df_arrdt, df_paris = calculer_projections(pression)
     pression = calculer_pression(listestations,liste_ve)
     energie = enedis_paris_data(2022)
     if not listestations.empty:
@@ -369,6 +370,9 @@ def force_reimport():
         database.sauvegarder_population(population)
     if not pression.empty:
         database.sauvegarder_pression(pression)
+    if not liste_ve.empty:
+        database.sauvegarder_parc_vehicules(liste_ve)
+
 
 # Fonction projections
 def calculer_projections(pression):
