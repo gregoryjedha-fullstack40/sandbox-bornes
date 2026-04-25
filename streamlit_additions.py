@@ -6,11 +6,6 @@ import streamlit as st
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Chargement des données
-# ─────────────────────────────────────────────────────────────────────────────
-
 @st.cache_data(ttl=3600)
 def charger_projections():
     """Charge les projections par arrondissement × scenario × horizon."""
@@ -40,13 +35,6 @@ def _niveau_stress(pression):
     if pression < 35:
         return "AMBRE"
     return "ROUGE"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# ===== BLOC 1 · Projection scénario × horizon ================================
-# Ajoute un onglet qui répond à la question centrale du projet :
-# « Dans N années, avec tel scénario, combien de bornes manquent, et où ? »
-# ─────────────────────────────────────────────────────────────────────────────
 
 def render_tab_projection(geojson, arr_selectionnes=None):
     st.markdown("### Projection du déficit par arrondissement")
@@ -147,12 +135,6 @@ def render_tab_projection(geojson, arr_selectionnes=None):
             height=420,
         )
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# ===== BLOC 2 · Classement global & comparaison scénarios ====================
-# Onglet qui visualise les 3 scénarios sur 5 horizons en un seul graphique
-# ─────────────────────────────────────────────────────────────────────────────
-
 def render_tab_classement(arr_selectionnes=None):
     st.markdown("### Évolution du déficit selon les 3 scénarios")
     st.markdown(
@@ -216,12 +198,6 @@ def render_tab_classement(arr_selectionnes=None):
     pivot.columns = ["Bas", "Central", "Haut"]
     pivot.index.name = "Horizon (ans)"
     st.dataframe(pivot.round(0).astype(int), width='stretch')
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# ===== BLOC 3 · Soutenabilité énergie ========================================
-# Onglet qui croise le déficit avec la capacité réseau par arrondissement
-# ─────────────────────────────────────────────────────────────────────────────
 
 def render_tab_energie(geojson, df_nrj=None):
     st.markdown("### Soutenabilité réseau · à horizon 3 ans")

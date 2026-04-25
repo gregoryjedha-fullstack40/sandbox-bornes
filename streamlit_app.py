@@ -247,7 +247,14 @@ with st.sidebar:
             
             st.rerun()
 
+    if st.button("🔄 Mise à jour des datasets", width='stretch'):
+            with st.spinner("Mise à jour de la base de données en cours..."):
+                from etl import force_reimport
+                force_reimport()
+                st.rerun()
+    
     st.markdown("---")
+
     if st.button("📍 Recommandations DBSCAN", width='stretch'):
         st.switch_page("pages/recommandations.py")
 

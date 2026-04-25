@@ -168,6 +168,7 @@ def evolution_parc_ve(df_vehicules):
     evolution["taux_ve"] = (evolution["nb_ve"] / evolution["nb_vp_total"] * 100).round(2)    
     return evolution
 
+population = etl.recuperer_population()
 stations_belib = etl.recuperer_liste_stations_belib()
 stations_gireve = etl.recuperer_liste_stations_gireve()
 listestations = etl.fusionner_sources(stations_belib, stations_gireve)

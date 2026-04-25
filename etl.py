@@ -234,9 +234,8 @@ def recuperer_liste_stations_belib(maj_airflow=False):
     print(f"Nombre d'enregistrements uniques récupérés pour Belib' : {len(listestations)}")
     return listestations
 
-def recuperer_statuts_pdc_gireve():
+def recuperer_statuts_pdc_gireve(force=False):
     #on récupère le statut de disponibilité actualisé de chaque point de charge, en temps réel.
-    #Nous ne disposons pas encore du fichier sur le serveur donc nous le récupérons sur le site transports.data.gouv.fr édité par le Ministère des Transports et mis à jour régulièrement.
     maintenant = datetime.now().replace(minute=0, second=0, microsecond=0)
     if maintenant.hour > 2:
         maintenant = maintenant.replace(hour=maintenant.hour - 2)
@@ -245,7 +244,7 @@ def recuperer_statuts_pdc_gireve():
     plus_tot = maintenant - timedelta(minutes=1)
     fromdate = plus_tot.strftime("%Y-%m-%dT%H:%M:%S")
     todate = maintenant.strftime("%Y-%m-%dT%H:%M:%S")
-    data = collect_data(source="irve_dyn")
+    data = collect_data(source="irve_dyn",fromdate=fromdate,todate=todate,force=force)
     if data is None or data.empty:
         return pd.DataFrame()
     data = data.rename(columns={"statut_actuel": "occupation_pdc"})
@@ -255,16 +254,16 @@ def recuperer_statuts_pdc_gireve():
     print(f"Récupération des statuts IRVE / Gireve du {fromdate} au {todate}.")
     return data
 
-def recuperer_liste_stations_gireve():
+def recuperer_liste_stations_gireve(force=False):
       """Récupère la liste des stations IRVE (Gireve) pour Paris."""
       print("Récupération des données IRVE / Gireve.")
-      stations_gireve = collect_data(source="irve_conso")
+      stations_gireve = collect_data(source="irve_conso",force=force)
 
       if stations_gireve is None or stations_gireve.empty:
           print("Aucune donnée IRVE / Gireve disponible.")
           return pd.DataFrame()
 
-      statuts = recuperer_statuts_pdc_gireve()
+      statuts = recuperer_statuts_pdc_gireve(force)
       if not statuts.empty:
           stations_gireve = stations_gireve.merge(
               statuts,
@@ -350,6 +349,26 @@ def recuperer_population():
     except Exception as e:
         print(f"Population pas récupérée sur S3 : {e}")
         return pd.DataFrame()
+
+def force_reimport():
+    import database
+    from bornes_arrondissements import calculer_pression
+    population = recuperer_population()
+    stations_belib = recuperer_liste_stations_belib(True)
+    stations_gireve = recuperer_liste_stations_gireve(True)
+    listestations = fusionner_sources(stations_belib, stations_gireve)
+    listestations.to_csv("./data/stations_paris.csv", index=False)
+    liste_ve = recuperer_vehicules_electriques()
+    pression = calculer_pression(listestations,liste_ve)
+    energie = enedis_paris_data(2022)
+    if not listestations.empty:
+        database.sauvegarder_totalite_bornes(listestations)
+    if not energie.empty:
+        database.sauvegarder_energie(energie)  
+    if not population.empty:
+        database.sauvegarder_population(population)
+    if not pression.empty:
+        database.sauvegarder_pression(pression)
 
 # Fonction projections
 def calculer_projections(pression):

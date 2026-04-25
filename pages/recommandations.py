@@ -311,7 +311,7 @@ with col_bar:
     )
     fig_bar.update_traces(textposition="outside")
     fig_bar.update_layout(margin=dict(l=0, r=40, t=10, b=0), showlegend=False)
-    st.plotly_chart(fig_bar, use_container_width=True, config={"responsive": True})
+    st.plotly_chart(fig_bar, width='stretch', config={"responsive": True})
 
 with col_table:
     st.markdown("### Top 20 emplacements")
