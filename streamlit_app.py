@@ -11,6 +11,7 @@ from folium.plugins import MarkerCluster, HeatMap
 from streamlit_folium import st_folium
 import branca.colormap as cm
 import database
+from stqdm import stqdm
 from streamlit_additions import (
     render_tab_projection,
     render_tab_classement,
@@ -251,8 +252,7 @@ with st.sidebar:
     if st.button("🔄 Mise à jour des datasets", width='stretch'):
             with st.spinner("Mise à jour de la base de données en cours..."):
                 from etl import force_reimport
-                from tqdm import tqdm
-                st.text(tqdm.tqdm(force_reimport()))
+                force_reimport()
                 st.cache_data.clear().rerun()
     
     st.markdown("---")
