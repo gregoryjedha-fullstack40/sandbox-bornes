@@ -18,7 +18,7 @@ from streamlit_additions import (
 )
 
 st.set_page_config(
-    page_title="Bornes VE Paris",
+    page_title="Bornes VE Paris - Sandbox Version",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -248,7 +248,7 @@ with st.sidebar:
             st.rerun()
 
     st.markdown("---")
-    if st.button("📍 Recommandations DBSCAN", use_container_width=True):
+    if st.button("📍 Recommandations DBSCAN", width='stretch'):
         st.switch_page("pages/recommandations.py")
 
 
@@ -535,11 +535,11 @@ with tab_energie:
                 margin=dict(l=0, r=60, t=10, b=0),
                 plot_bgcolor="rgba(0,0,0,0)",
             )
-            st.plotly_chart(fig_bar, use_container_width=True, config={"responsive": True})
+            st.plotly_chart(fig_bar, width='stretch', config={"responsive": True})
         
         with col_g2:
             st.markdown("#### MWh par habitant")
-            df_sorted2 = df_nrj.sort_values("mwh_par_habitant", ascending=True, config={"responsive": True})
+            df_sorted2 = df_nrj.sort_values("mwh_par_habitant", ascending=True)
             fig_bar2 = go.Figure(go.Bar(
                 x=df_sorted2["mwh_par_habitant"],
                 y=df_sorted2["label"],
@@ -555,7 +555,7 @@ with tab_energie:
                 margin=dict(l=0, r=60, t=10, b=0),
                 plot_bgcolor="rgba(0,0,0,0)",
             )
-            st.plotly_chart(fig_bar2, use_container_width=True, config={"responsive": True})
+            st.plotly_chart(fig_bar2, width='stretch', config={"responsive": True})
 
     
 with tab_population:
