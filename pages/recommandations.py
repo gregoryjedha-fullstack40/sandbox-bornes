@@ -37,10 +37,10 @@ from sklearn.neighbors import BallTree
 coords = bornes[["latitude", "longitude"]].dropna().values
 coords_rad = np.radians(coords)
 
-db = DBSCAN(eps=0.002, min_samples=min_bornes_cluster, metric="euclidean")
+db = DBSCAN(eps=0.0015, min_samples=min_bornes_cluster, metric="haversine")
 bornes_clusters = db.fit_predict(coords_rad)
 
-nb_clusters = len(set(bornes_clusters)) - (1 if -1 in bornes_clusters else 0)
+nb_clusters = len(set(bornes_clusters))
 nb_bruit = (bornes_clusters == -1).sum()
 
 # Grille de points candidats
@@ -52,7 +52,7 @@ lats = np.arange(lat_min, lat_max, resolution)
 lons = np.arange(lon_min, lon_max, resolution)
 grille = np.array([(lat, lon) for lat in lats for lon in lons])
 
-tree = BallTree(coords_rad, metric="euclidean")
+tree = BallTree(coords_rad, metric="haversine")
 distances, _ = tree.query(np.radians(grille), k=1)
 distances_m = distances.flatten() * 6_371_000
 
