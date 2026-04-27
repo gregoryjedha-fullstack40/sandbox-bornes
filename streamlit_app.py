@@ -11,7 +11,6 @@ from folium.plugins import MarkerCluster, HeatMap
 from streamlit_folium import st_folium
 import branca.colormap as cm
 import database
-from stqdm import stqdm
 from streamlit_additions import (
     render_tab_projection,
     render_tab_classement,
@@ -356,7 +355,10 @@ with tab_carte:
         st.plotly_chart(fig, width='stretch', config={"responsive": True})
     
     elif vue == "Puissance":
-        df_puissance = df_puissance.copy()
+        df_puissance = df_filtre[df_filtre["puissance_nominale"].notna()].copy()
+        df_puissance = df_puissance[
+            df_puissance["puissance_nominale"].between(puissance_min, puissance_max)
+        ]
         df_puissance["niveau_charge"] = pd.cut(
             df_puissance["puissance_nominale"],
             bins=[0, 7, 22, 999],
@@ -383,9 +385,18 @@ with tab_carte:
             disponibles=("statut_actuel", lambda x: (x == "Disponible").sum()),
             occupees=("statut_actuel", lambda x: (x == "Occupé (en charge)").sum()),
         ).reset_index()
+        
+        # Forcer en numérique
+        taux["disponibles"] = pd.to_numeric(taux["disponibles"], errors="coerce").fillna(0)
+        taux["occupees"] = pd.to_numeric(taux["occupees"], errors="coerce").fillna(0)
+        
+        # Forcer en float natif Python (contourne Arrow)
+        taux["disponibles"] = taux["disponibles"].astype(float)
+        taux["occupees"] = taux["occupees"].astype(float)
+        
         denom = taux["disponibles"] + taux["occupees"]
         taux["taux_disponibilite"] = (taux["disponibles"] / denom.replace(0, float("nan")) * 100).round(1)
-        
+
         fig = px.choropleth_map(
             taux, geojson=geojson,
             locations="num_arrondissement",
