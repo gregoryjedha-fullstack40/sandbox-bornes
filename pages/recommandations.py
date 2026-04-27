@@ -52,25 +52,11 @@ if bornes.empty or pression.empty or geojson is None:
     st.error("Données manquantes. Lancez d'abord l'ETL pour alimenter la base.")
     st.stop()
 
-
-with st.sidebar:
-    st.markdown("## Paramètres DBSCAN")
-    
     distance_max = 300
     min_bornes_cluster = 2
     poids_pression = 0.9
-    resolution = st.select_slider(
-        "Résolution de la grille",
-        options=[0.002, 0.003, 0.004, 0.005],
-        value=0.003,
-        format_func=lambda x: f"~{int(x * 6_371_000)}m",
-        help="Espacement entre les bornes (epsilon)."
-    )
+    resolution = 0.003
     nb_resultats = 100
-
-# ─── Étape 1 : Grille intra-muros ───
-# On ne génère des points candidats QUE à l'intérieur des arrondissements parisiens.
-# Cela évite de recommander des emplacements à Vincennes, Suresnes, etc.
 
 from shapely.geometry import Point, shape
 
