@@ -15,7 +15,7 @@ def init_db():
     """Créer les tables si elles n'existent pas."""
     engine = get_engine()
     Base.metadata.create_all(engine)
-    print(f"Base de données initialisée : {DB_PATH}")
+    print(f"Base de données initialisée : {db_path}")
     return engine
 
 def get_session():

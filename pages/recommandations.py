@@ -280,9 +280,9 @@ with col_bar:
     st.plotly_chart(fig_bar, width='stretch', config={"responsive": True})
 
 with col_table:
-    st.markdown("### Top 20 emplacements")
+    st.markdown("### Top 10 emplacements")
     st.dataframe(
-        candidats.head(20)[[
+        candidats.head(10)[[
             "arr_label", "latitude", "longitude",
             "distance_borne_m", "pression", "score_priorite",
         ]]
