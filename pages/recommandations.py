@@ -15,20 +15,6 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import database
 
-st.set_page_config(page_title="Recommandations DBSCAN", page_icon="📍", layout="wide")
-
-# Bouton retour
-if st.button("← Retour au dashboard"):
-    st.switch_page("streamlit_app.py")
-
-st.markdown("# 📍 Zones recommandées pour de nouvelles bornes")
-st.markdown(
-    "> Analyse DBSCAN : identification des zones sous-couvertes à Paris, "
-    "croisées avec la pression VE par arrondissement. "
-    "Seuls les emplacements **intra-muros** sont considérés."
-)
-
-
 # ─── Chargement des données ───
 
 @st.cache_data(ttl=300)
@@ -67,42 +53,20 @@ if bornes.empty or pression.empty or geojson is None:
     st.stop()
 
 
-# ─── Paramètres dans la sidebar ───
-
 with st.sidebar:
     st.markdown("## Paramètres DBSCAN")
     
-    distance_max = st.slider(
-        "Distance min sans borne (m)",
-        min_value=200, max_value=800, value=300, step=50,
-        help="Seuil en dessous duquel on considère qu'une zone est déjà couverte."
-    )
-    
-    min_bornes_cluster = st.slider(
-        "Bornes min par cluster",
-        min_value=2, max_value=10, value=3,
-        help="Nombre minimum de bornes pour former un cluster DBSCAN."
-    )
-    
-    poids_pression = st.slider(
-        "Poids pression vs couverture",
-        min_value=0.0, max_value=1.0, value=0.6, step=0.1,
-        help="0 = seule la distance compte, 1 = seule la pression compte."
-    )
-    
+    distance_max = 300
+    min_bornes_cluster = 2
+    poids_pression = 0.9
     resolution = st.select_slider(
         "Résolution de la grille",
         options=[0.002, 0.003, 0.004, 0.005],
         value=0.003,
         format_func=lambda x: f"~{int(x * 6_371_000)}m",
-        help="Espacement entre les points candidats."
+        help="Espacement entre les bornes (epsilon)."
     )
-    
-    nb_resultats = st.slider(
-        "Nombre de résultats affichés",
-        min_value=10, max_value=100, value=50, step=10,
-    )
-
+    nb_resultats = 100
 
 # ─── Étape 1 : Grille intra-muros ───
 # On ne génère des points candidats QUE à l'intérieur des arrondissements parisiens.
@@ -173,10 +137,12 @@ distances, _ = tree.query(np.radians(grille[["latitude", "longitude"]].values), 
 # Conversion radians → mètres (rayon Terre = 6 371 000 m)
 grille["distance_borne_m"] = (distances.flatten() * 6_371_000).round(0)
 
+#Suppression des résultats aberrants ou des points périphériques
+grille = grille[grille["distance_borne_m"]<500]
 
 # ─── Étape 4 : Score de priorité pondéré ───
 # On croise la couverture spatiale (distance) avec la demande (pression VE/borne).
-# Pondération configurable : par défaut 60% pression, 40% distance.
+# Pondération choisie : 0.9 car la pression est notre critère de base
 
 grille = grille.merge(
     pression[["num_arrondissement", "pression", "nb_ve", "nb_pdc"]],
