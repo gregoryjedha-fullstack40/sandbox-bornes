@@ -2,12 +2,14 @@ import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from models import Base, Borne, ParcVehiculesElectriques, Pression, Energie, Population
+import os
 
-DB_PATH = "./bornes.db"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+db_path = os.path.join(BASE_DIR, "bornes.db")
 
 def get_engine():
     """Connexion à la base de données"""
-    return create_engine(f"sqlite:///{DB_PATH}", echo=False)
+    return create_engine(f"sqlite:///{db_path}", echo=False)
 
 def init_db():
     """Créer les tables si elles n'existent pas."""
