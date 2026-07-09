@@ -1,4 +1,4 @@
-#etl.py — Pipeline ETL : API Airflow → S3
+#etl.py — Pipeline ETL : S3 (cache) → APIs publiques Belib'/IRVE Gireve → API Airflow (legacy, fallback)
 import io
 import os
 import re
@@ -19,22 +19,28 @@ EMAIL = os.environ.get("ALH_EMAIL")
 PASSWORD = os.environ.get("ALH_PASSWORD")
 
 def collect_data(source, fromdate=None, todate=None, force=False):
-    """Lit depuis S3, fallback sur l'API Airflow si S3 non configuré."""
-    
-    # Priorité 1 : S3
+    """Lit depuis S3, sinon collecte en direct sur les APIs publiques (Belib' / IRVE Gireve),
+    avec l'ancien serveur Airflow en tout dernier recours (au cas où il redevienne disponible)."""
+
+    # Priorité 1 : S3 (cache)
     if S3_BUCKET and not force:
         df = lecture_s3(source)
         if df is not None:
             return df
-    
-    # Fallback : API Airflow (ancien comportement)
+
+    # Priorité 2 : collecte directe sur les APIs publiques (le serveur Airflow ALH n'est plus fiable)
+    df = lecture_web(source)
+    if df is not None:
+        return df
+
+    # Priorité 3 : API Airflow (ancien comportement, conservé en fallback)
     EMAIL = os.environ.get("ALH_EMAIL")
     PASSWORD = os.environ.get("ALH_PASSWORD")
     if EMAIL and PASSWORD:
         return lecture_airflow(source, fromdate, todate)
-    
-    #Cas extrême si aucun des deux ne fonctionne on renvoie une erreur
-    print(f"Ni S3 ni Airflow configurés pour {source}")
+
+    #Cas extrême si aucune des trois sources ne fonctionne on renvoie une erreur
+    print(f"Ni S3, ni API web, ni Airflow n'ont fonctionné pour {source}")
     return None
 
 def lecture_s3(source):
@@ -91,7 +97,76 @@ def lecture_airflow(source, fromdate=None, todate=None):
     except requests.exceptions.RequestException as e:
         print(f"Erreur lors de l'import des données : {source} - {e}")
         return None
-    
+
+
+def lecture_web(source):
+    """Collecte directe sur les APIs publiques (Belib' Paris Data / IRVE Gireve),
+    en remplacement du serveur Airflow ALH (indisponible). Ces APIs ne renvoient qu'un
+    instantané courant, sans historique : fromdate/todate ne sont pas utilisables ici."""
+    try:
+        if source == "belib_stat":
+            return fetch_belib_stat()
+        if source == "belib_rt":
+            return fetch_belib_rt()
+        if source == "irve_conso":
+            return fetch_irve_conso()
+        if source == "irve_dyn":
+            return fetch_irve_dyn()
+        return None
+    except requests.exceptions.RequestException as e:
+        print(f"Erreur lors de la collecte web des données : {source} - {e}")
+        return None
+
+
+def fetch_belib_stat():
+    """Belib' - Points de recharge - Données statiques (Paris Data / Opendatasoft)."""
+    url = ("https://opendata.paris.fr/api/explore/v2.1/catalog/datasets/"
+           "belib-points-de-recharge-pour-vehicules-electriques-donnees-statiques/exports/csv")
+    response = requests.get(url, params={"delimiter": ";"}, timeout=120)
+    response.raise_for_status()
+    df = pd.read_csv(io.StringIO(response.text), sep=";", low_memory=False)
+    # coordonneesxy est une chaîne unique "lat, lon" à éclater en deux colonnes numériques
+    coords = df["coordonneesxy"].str.split(",", expand=True)
+    df["lat"] = pd.to_numeric(coords[0], errors="coerce")
+    df["lon"] = pd.to_numeric(coords[1], errors="coerce")
+    print(f"Récupération de [belib_stat] {len(df)} lignes depuis Paris Data (opendata.paris.fr)")
+    return df
+
+
+def fetch_belib_rt():
+    """Belib' - Points de recharge - Disponibilité temps réel (Paris Data / Opendatasoft)."""
+    url = ("https://opendata.paris.fr/api/explore/v2.1/catalog/datasets/"
+           "belib-points-de-recharge-pour-vehicules-electriques-disponibilite-temps-reel/exports/csv")
+    response = requests.get(url, params={"delimiter": ";"}, timeout=120)
+    response.raise_for_status()
+    df = pd.read_csv(io.StringIO(response.text), sep=";", low_memory=False)
+    df = df.rename(columns={"last_updated": "snapshot_at"})
+    print(f"Récupération de [belib_rt] {len(df)} lignes depuis Paris Data (opendata.paris.fr)")
+    return df
+
+
+def fetch_irve_conso():
+    """IRVE statique - Fichier Gireve (transport.data.gouv.fr), restreint à Paris."""
+    url = "https://proxy.transport.data.gouv.fr/resource/gireve-irve-statique"
+    response = requests.get(url, params={"format": "csv"}, timeout=180)
+    response.raise_for_status()
+    df = pd.read_csv(io.StringIO(response.text), low_memory=False)
+    # On ne garde que les stations parisiennes (75101-75120), identifiées via l'adresse
+    df = df[df["adresse_station"].apply(extraire_num_arrondissement).notna()]
+    print(f"Récupération de [irve_conso] {len(df)} lignes pour Paris depuis le fichier Gireve (transport.data.gouv.fr)")
+    return df
+
+
+def fetch_irve_dyn():
+    """IRVE dynamique - Fichier Gireve (transport.data.gouv.fr)."""
+    url = "https://proxy.transport.data.gouv.fr/resource/gireve-irve-dynamique"
+    response = requests.get(url, params={"format": "csv"}, timeout=120)
+    response.raise_for_status()
+    df = pd.read_csv(io.StringIO(response.text), low_memory=False)
+    df = df.rename(columns={"horodatage": "snapshot_at"})
+    print(f"Récupération de [irve_dyn] {len(df)} lignes depuis le fichier Gireve (transport.data.gouv.fr)")
+    return df
+
 
 def harmoniser_gireve(df):
     """Normalise les colonnes Gireve pour la fusion avec le dataset principal."""
