@@ -434,8 +434,8 @@ def force_reimport():
     listestations = fusionner_sources(stations_belib, stations_gireve)
     listestations.to_csv("./data/stations_paris.csv", index=False)
     liste_ve = recuperer_vehicules_electriques()
-    df_arrdt, df_paris = calculer_projections(pression)
     pression = calculer_pression(listestations,liste_ve)
+    df_arrdt, df_paris = calculer_projections(pression)
     energie = enedis_paris_data(2022)
     if not listestations.empty:
         database.sauvegarder_totalite_bornes(listestations)
