@@ -52,11 +52,11 @@ if bornes.empty or pression.empty or geojson is None:
     st.error("Données manquantes. Lancez d'abord l'ETL pour alimenter la base.")
     st.stop()
 
-    distance_max = 300
-    min_bornes_cluster = 2
-    poids_pression = 0.9
-    resolution = 0.003
-    nb_resultats = 100
+distance_max = 300
+min_bornes_cluster = 2
+poids_pression = 0.9
+resolution = 0.003
+nb_resultats = 100
 
 from shapely.geometry import Point, shape
 
