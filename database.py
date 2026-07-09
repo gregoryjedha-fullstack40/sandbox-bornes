@@ -24,6 +24,28 @@ def get_session():
     Session = sessionmaker(bind=engine)
     return Session()
 
+def assurer_donnees_disponibles():
+    """Lance l'ETL d'initialisation si bornes.db ou la table bornes est absente.
+
+    Nécessaire car le routeur multipage de Streamlit exécute directement le
+    script de la page ciblée (ex: pages/recommandations.py) sans repasser par
+    streamlit_app.py, donc ce bootstrap doit pouvoir être appelé depuis
+    n'importe quelle page.
+    """
+    besoin_init = not os.path.exists(db_path)
+    if not besoin_init:
+        try:
+            with get_engine().connect() as conn:
+                conn.exec_driver_sql("SELECT 1 FROM bornes LIMIT 1")
+        except Exception:
+            besoin_init = True
+
+    if besoin_init:
+        os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
+        script = os.path.join(BASE_DIR, "bornes_arrondissements.py")
+        if os.path.exists(script):
+            exec(open(script).read(), {"__name__": "__main__"})
+
 def sauvegarder_bornes(df):
     """Insérer ou mettre à jour les points de charge (ou bornes) depuis notre DataFrame harmonisé."""
     engine = init_db()

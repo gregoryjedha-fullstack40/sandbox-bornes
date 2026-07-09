@@ -86,11 +86,7 @@ def hauteur_graphique(desktop=600, mobile=350):
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-if not os.path.exists(os.path.join(BASE_DIR, "bornes.db")):
-    os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
-    script = os.path.join(BASE_DIR, "bornes_arrondissements.py")
-    if os.path.exists(script):
-        exec(open(script).read())
+database.assurer_donnees_disponibles()
 
 
 @st.cache_data(ttl=300)

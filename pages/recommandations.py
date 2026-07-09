@@ -15,6 +15,8 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import database
 
+database.assurer_donnees_disponibles()
+
 # ─── Chargement des données ───
 
 @st.cache_data(ttl=300)
