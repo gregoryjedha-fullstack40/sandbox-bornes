@@ -56,9 +56,20 @@ if bornes.empty or pression.empty or geojson is None:
 
 distance_max = 300
 min_bornes_cluster = 2
-poids_pression = 0.9
 resolution = 0.003
 nb_resultats = 100
+
+with st.sidebar:
+    st.markdown("## ⚡ Pondération")
+    poids_pression = st.slider(
+        "Pression VE vs couverture géographique",
+        min_value=0.0,
+        max_value=1.0,
+        value=0.9,
+        step=0.05,
+        help="0 = priorité à la couverture géographique (distance à la borne la plus proche). "
+             "1 = priorité à la pression VE (demande dans l'arrondissement).",
+    )
 
 from shapely.geometry import Point, shape
 
@@ -130,7 +141,7 @@ grille = grille[grille["distance_borne_m"]<500]
 
 # ─── Étape 4 : Score de priorité pondéré ───
 # On croise la couverture spatiale (distance) avec la demande (pression VE/borne).
-# Pondération choisie : 0.9 car la pression est notre critère de base
+# Pondération ajustable via le curseur de la barre latérale.
 
 grille = grille.merge(
     pression[["num_arrondissement", "pression", "nb_ve", "nb_pdc"]],
