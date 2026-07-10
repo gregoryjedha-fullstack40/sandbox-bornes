@@ -55,7 +55,6 @@ if bornes.empty or pression.empty or geojson is None:
     st.stop()
 
 distance_max = 300
-min_bornes_cluster = 2
 resolution = 0.003
 nb_resultats = 100
 
@@ -69,6 +68,17 @@ with st.sidebar:
         step=0.05,
         help="0 = priorité à la couverture géographique (distance à la borne la plus proche). "
              "1 = priorité à la pression VE (demande dans l'arrondissement).",
+    )
+
+    st.markdown("## 🧩 Clustering")
+    min_bornes_cluster = st.slider(
+        "Nombre minimal de bornes par cluster",
+        min_value=2,
+        max_value=5,
+        value=2,
+        step=1,
+        help="Seuil `min_samples` du DBSCAN : nombre de bornes proches requis "
+             "pour former un cluster (zone considérée comme couverte).",
     )
 
 from shapely.geometry import Point, shape
@@ -195,8 +205,8 @@ with k4:
 
 # Explication des poids
 st.info(
-    f"**Pondération actuelle** : {int(poids_pression * 100)}% pression (demande VE) "
-    f"+ {int((1 - poids_pression) * 100)}% couverture (distance). "
+    f"**Pondération actuelle** : {round(poids_pression * 100)}% pression (demande VE) "
+    f"+ {round((1 - poids_pression) * 100)}% couverture (distance). "
     f"Ajustez le curseur dans la barre latérale."
 )
 
@@ -326,8 +336,8 @@ with st.expander("📝 Méthodologie DBSCAN"):
     et une borne de recharge (source : AVERE France). En dessous, la zone est considérée couverte.
     
     **Score de priorité** :
-    - Score couverture (distance normalisée) × {int((1 - poids_pression) * 100)}%
-    - Score pression (VE/borne normalisé) × {int(poids_pression * 100)}%
+    - Score couverture (distance normalisée) × {round((1 - poids_pression) * 100)}%
+    - Score pression (VE/borne normalisé) × {round(poids_pression * 100)}%
     
     **Filtrage intra-muros** :
     La grille de points candidats est contrainte aux polygones des 20 arrondissements 
