@@ -145,15 +145,29 @@ def fetch_belib_rt():
     return df
 
 
+# URL stable de la ressource CSV du fichier consolidé national IRVE (data.gouv.fr)
+IRVE_CONSO_URL = "https://www.data.gouv.fr/api/1/datasets/r/eb76d20a-8501-400e-b336-d85724de5435"
+
+
 def fetch_irve_conso():
-    """IRVE statique - Fichier Gireve (transport.data.gouv.fr), restreint à Paris."""
-    url = "https://proxy.transport.data.gouv.fr/resource/gireve-irve-statique"
-    response = requests.get(url, params={"format": "csv"}, timeout=180)
+    """IRVE statique - Base nationale consolidée (data.gouv.fr), restreinte à Paris.
+
+    Le fichier Gireve ne contenait que les aménageurs abonnés à son service (~115 lignes).
+    Le fichier consolidé agrège tous les producteurs publiés avec le tag `irve`
+    et vise l'exhaustivité (~155 Mo, une ligne = un point de recharge).
+    """
+    response = requests.get(IRVE_CONSO_URL, timeout=300)
     response.raise_for_status()
     df = pd.read_csv(io.StringIO(response.text), low_memory=False)
-    # On ne garde que les stations parisiennes (75101-75120), identifiées via l'adresse
-    df = df[df["adresse_station"].apply(extraire_num_arrondissement).notna()]
-    print(f"Récupération de [irve_conso] {len(df)} lignes pour Paris depuis le fichier Gireve (transport.data.gouv.fr)")
+
+    # Filtre Paris robuste : on garde une ligne si l'arrondissement se déduit de l'adresse,
+    # OU si le code INSEE commune relève du département 75 (Paris = un seul département).
+    # Le OR rattrape les stations dont l'adresse est mal formatée mais bien géocodée.
+    mask_adresse = df["adresse_station"].apply(extraire_num_arrondissement).notna()
+    mask_insee = df["code_insee_commune"].astype(str).str.match(r"^75\d{3}$")
+    df = df[mask_adresse | mask_insee]
+
+    print(f"Récupération de [irve_conso] {len(df)} lignes pour Paris depuis la base consolidée (data.gouv.fr)")
     return df
 
 
@@ -425,9 +439,39 @@ def recuperer_population():
         print(f"Population pas récupérée sur S3 : {e}")
         return pd.DataFrame()
 
+def calculer_pression(df_bornes, df_vehicules):
+    """Calcule la pression (VE immatriculés / bornes) par arrondissement.
+
+    Réplique de la fonction du même nom dans bornes_arrondissements.py, déplacée
+    ici pour être importable sans déclencher l'exécution du script legacy (qui
+    lance toute la collecte au chargement du module).
+    """
+    dernier_trimestre = df_vehicules["date_arrete"].max()
+    ve_derniers = df_vehicules[df_vehicules["date_arrete"] == dernier_trimestre]
+
+    ve_par_arr = ve_derniers.groupby("num_arrondissement").agg(
+        nb_ve=("nb_vp_rechargeables_el", "sum"),
+        nb_vp_total=("nb_vp", "sum")
+    ).reset_index()
+
+    bornes_par_arr = (
+        df_bornes.groupby("num_arrondissement")
+        .agg(nb_pdc=("id_pdc_itinerance", "count"))
+        .reset_index()
+    )
+
+    pression = ve_par_arr.merge(bornes_par_arr, on="num_arrondissement", how="left")
+    pression["nb_pdc"] = pression["nb_pdc"].fillna(0)
+    pression["pression"] = (pression["nb_ve"] / pression["nb_pdc"]).round(1)
+    pression["taux_ve"] = (pression["nb_ve"] / pression["nb_vp_total"] * 100).round(1)
+    pression = pression.sort_values("pression", ascending=False)
+
+    print(f"Pression VE par arrondissement (trimestre {dernier_trimestre}) :")
+    print(pression.to_string(index=False))
+    return pression
+
 def force_reimport():
     import database
-    from bornes_arrondissements import calculer_pression, calculer_projections
     population = recuperer_population()
     stations_belib = recuperer_liste_stations_belib(True)
     stations_gireve = recuperer_liste_stations_gireve(True)
@@ -449,41 +493,9 @@ def force_reimport():
         database.sauvegarder_parc_vehicules(liste_ve)
 
 
-# Fonction projections
-def calculer_projections(pression):
-    if pression is None or pression.empty:
-        return pd.DataFrame(), pd.DataFrame()
-    scenarios = {"bas": 0.20, "central": 0.40, "haut": 0.60}
-    PRESSION_CIBLE = 10
-    lignes_arrdt, lignes_paris = [], []
-    for scenario, taux in scenarios.items():
-        for horizon in range(1, 6):
-            total_deficit = 0
-            for _, row in pression.iterrows():
-                arr = int(row["num_arrondissement"])
-                nb_ve = row.get("nb_ve", 0) or 0
-                nb_pdc = row.get("nb_pdc", 0) or 0
-                ve_proj = int(nb_ve * (1 + taux) ** horizon)
-                bornes_cible = max(int(ve_proj / PRESSION_CIBLE), nb_pdc)
-                deficit = max(0, bornes_cible - nb_pdc)
-                pression_proj = round(ve_proj / nb_pdc, 1) if nb_pdc > 0 else 999
-                lignes_arrdt.append({
-                    "arr_num": arr, "scenario": scenario, "horizon_years": horizon,
-                    "ve_projete": ve_proj, "bornes_cible": bornes_cible,
-                    "deficit_bornes": deficit, "pression_projetee": pression_proj,
-                    "energie_add_mwh": round(deficit * 2.5, 1),
-                })
-                total_deficit += deficit
-            lignes_paris.append({
-                "scenario": scenario, "horizon_years": horizon,
-                "deficit_total": total_deficit,
-            })
-    return pd.DataFrame(lignes_arrdt), pd.DataFrame(lignes_paris)
-
-    
-def enedis_paris_data(annee):
+def enedis_paris_data(annee, force=False):
     """Récupère les données de consommation Enedis pour Paris."""
-    if S3_BUCKET:
+    if S3_BUCKET and not force:
         df = lecture_s3("energie")
         if df is not None:
             return df
