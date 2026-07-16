@@ -15,33 +15,16 @@ import boto3
 S3_BUCKET = os.environ.get("S3_BUCKET", "")
 S3_PREFIX = os.environ.get("S3_PREFIX", "datasets/")
 AWS_REGION = os.environ.get("AWS_REGION", "eu-north-1")
-EMAIL = os.environ.get("ALH_EMAIL")
-PASSWORD = os.environ.get("ALH_PASSWORD")
+
 
 def collect_data(source, fromdate=None, todate=None, force=False):
-    """Lit depuis S3, sinon collecte en direct sur les APIs publiques (Belib' / IRVE Gireve),
-    avec l'ancien serveur Airflow en tout dernier recours (au cas où il redevienne disponible)."""
-
-    # Priorité 1 : S3 (cache)
-    if S3_BUCKET and not force:
-        df = lecture_s3(source)
-        if df is not None:
-            return df
-
-    # Priorité 2 : collecte directe sur les APIs publiques (le serveur Airflow ALH n'est plus fiable)
     df = lecture_web(source)
     if df is not None:
         return df
-
-    # Priorité 3 : API Airflow (ancien comportement, conservé en fallback)
-    EMAIL = os.environ.get("ALH_EMAIL")
-    PASSWORD = os.environ.get("ALH_PASSWORD")
-    if EMAIL and PASSWORD:
-        return lecture_airflow(source, fromdate, todate)
-
+    else:
     #Cas extrême si aucune des trois sources ne fonctionne on renvoie une erreur
-    print(f"Ni S3, ni API web, ni Airflow n'ont fonctionné pour {source}")
-    return None
+        print(f"Ni S3, ni API web, ni Airflow n'ont fonctionné pour {source}")
+        return None
 
 def lecture_s3(source):
     """Lecture S3."""
@@ -55,49 +38,6 @@ def lecture_s3(source):
     except Exception as e:
         print(f"Attention : [{source}] S3 KO : {e}")
         return None
-    
-
-def lecture_airflow(source, fromdate=None, todate=None):
-    try:
-        if fromdate is None:
-            maintenant = datetime.now().replace(minute=0, second=0, microsecond=0)
-            if maintenant.hour > 2:
-                maintenant = maintenant.replace(hour=maintenant.hour - 2)
-            else:
-                maintenant = (maintenant - timedelta(days=1)).replace(hour=23)    
-            fromdate = (maintenant - timedelta(hours=2)).strftime("%Y-%m-%d")
-        if todate is None:
-            todate = maintenant.strftime("%Y-%m-%d")
-        if not EMAIL or not PASSWORD:
-            return None
-        else:
-        #récupérer les données sur le serveur AirFlow, en utilisant une requête GET avec les paramètres d'authentification et de date spécifiés, et en convertissant la réponse JSON en un DataFrame pandas pour une manipulation ultérieure.
-            url = "https://alh-consulting.com/api/bornes-ve/data"
-            params = {
-            "source": source,
-            "from": fromdate,
-            "to": todate,
-            }
-            auth = (EMAIL, PASSWORD)  # authentification basique avec email et mot de passe
-
-            response = requests.get(url, params=params, auth=auth, timeout=60)
-            df = pd.read_csv(io.StringIO(response.text), low_memory=False, dtype={
-            "code_insee_commune": str,
-            "prise_type_ef": str,
-            "prise_type_2": str,
-            "prise_type_combo_ccs": str,
-            "prise_type_chademo": str,
-            "prise_type_autre": str,
-            "paiement_acte": str,
-            "paiement_cb": str,
-            "reservation": str,
-            "station_deux_roues": str,
-            })
-            return df
-    except requests.exceptions.RequestException as e:
-        print(f"Erreur lors de l'import des données : {source} - {e}")
-        return None
-
 
 def lecture_web(source):
     """Collecte directe sur les APIs publiques (Belib' Paris Data / IRVE Gireve),
