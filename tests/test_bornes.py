@@ -113,7 +113,7 @@ def test_collect_data_belib():
         or "longitude" in df.columns
     )
 
-    assert "num_arrondissement" in df.columns
+    assert "id_station_itinerance" in df.columns
 
 def test_collect_data_irve():
     df2 = collect_data("irve_conso", fromdate=None, todate=None, force=True)
@@ -127,7 +127,7 @@ def test_collect_data_irve():
         "consolidated_longitude" in df2.columns
         or "longitude" in df2.columns
     )
-    assert "num_arrondissement" in df2.columns
+    assert "id_station_itinerance" in df2.columns
 
 def test_num_arrondissement(mock_bornes):
     row = mock_bornes.iloc[0]
