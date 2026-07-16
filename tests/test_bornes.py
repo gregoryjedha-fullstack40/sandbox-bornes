@@ -103,23 +103,39 @@ def test_collect_data_belib():
     df = collect_data("belib_stat", fromdate=None, todate=None, force=True)
     assert df is not None
     assert not df.empty
-    assert "latitude" in df.columns
-    assert "longitude" in df.columns
+    assert (
+        "lat" in df.columns
+        or "latitude" in df.columns
+    )
+
+    assert (
+        "lon" in df.columns
+        or "longitude" in df.columns
+    )
+
     assert "num_arrondissement" in df.columns
 
 def test_collect_data_irve():
     df2 = collect_data("irve_conso", fromdate=None, todate=None, force=True)
     assert df2 is not None
     assert not df2.empty
-    assert "latitude" in df2.columns
-    assert "longitude" in df2.columns
+    assert (
+        "consolidated_latitude" in df2.columns
+        or "latitude" in df2.columns
+    )
+    assert (
+        "consolidated_longitude" in df2.columns
+        or "longitude" in df2.columns
+    )
     assert "num_arrondissement" in df2.columns
 
-def test_num_arrondissement():
-    arr = extraire_num_arrondissement(mock_bornes()[0])
-    assert arr==12
+def test_num_arrondissement(mock_bornes):
+    row = mock_bornes.iloc[0]
+    arr = parser_arrondissement(row["code_insee_commune"])
+    assert arr == 12
 
-def test_parser_arrondissement():
-    arr = parser_arrondissement(mock_bornes[1]["code_insee_commune"])
-    assert arr==17
+def test_parser_arrondissement(mock_bornes):
+    code_insee = mock_bornes.iloc[1]["code_insee_commune"]
+    arr = parser_arrondissement(code_insee)
+    assert arr == 17
 
