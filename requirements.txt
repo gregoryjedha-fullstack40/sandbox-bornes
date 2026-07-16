@@ -14,3 +14,4 @@ branca>=0.7
 shapely
 scikit-learn
 stqdm
+mlflow==3.5.0
