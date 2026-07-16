@@ -265,7 +265,10 @@ st.plotly_chart(fig, width='stretch', config={"responsive": True})
 
 
 if st.button("Enregistrer dans MLflow"):
-        mlflow.start_run(run_name="DBSCAN_Paris_{datetime.now():%Y%m%d}")
+    if mlflow.active_run() is not None:
+        mlflow.end_run()
+
+    with mlflow.start_run(run_name=f"DBSCAN_Paris_{datetime.now():%Y%m%d}"):
         mlflow.set_tracking_uri("https://gregoryjedha-jedhaflow40.hf.space")
         mlflow.set_experiment(f"Bornes_DBSCAN_{datetime.now():%Y%m%d}")
         mlflow.sklearn.log_model(db, "DBSCAN_Paris")
