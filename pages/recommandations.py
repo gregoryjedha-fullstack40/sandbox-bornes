@@ -10,6 +10,11 @@ import plotly.express as px
 import json
 import os
 import sys
+import mlflow
+import mlflow.sklearn
+
+mlflow.set_tracking_uri("https://gregoryjedha-jedhaflow40.hf.space")
+mlflow.set_experiment("Bornes_DBSCAN")
 
 # Ajouter le dossier parent au path pour importer database
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -131,8 +136,19 @@ coords_rad = np.radians(coords)
 # eps en radians : distance_max en mètres / rayon Terre
 eps_rad = distance_max / 6_371_000
 
-db = DBSCAN(eps=eps_rad, min_samples=min_bornes_cluster, metric="haversine")
+with mlflow.start_run(run_name="DBSCAN_Paris"):
+    db = DBSCAN(eps=eps_rad, min_samples=min_bornes_cluster, metric="haversine")
+    mlflow.sklearn.log_model(db, "DBSCAN_Paris")
+
 bornes_clusters = db.fit_predict(coords_rad)
+mlflow.log_params({
+        "eps_m": distance_max,
+        "eps_rad": eps_rad,
+        "min_samples": min_bornes_cluster,
+        "metric": "haversine",
+        "resolution": resolution,
+        "poids_pression": poids_pression
+})
 
 nb_clusters = len(set(bornes_clusters)) - (1 if -1 in bornes_clusters else 0)
 nb_bruit = (bornes_clusters == -1).sum()
@@ -188,6 +204,18 @@ candidats["arr_label"] = candidats["num_arrondissement"].apply(
     lambda x: f"{int(x)}{'er' if x == 1 else 'e'} arr."
 )
 
+mlflow.log_metrics({
+        "clusters": nb_clusters,
+        "noise_points": nb_bruit,
+        "candidate_zones": len(candidats),
+        "avg_priority": candidats["score_priorite"].mean()
+})
+mlflow.sklearn.log_model(
+        sk_model=db,
+        artifact_path="DBSCAN_Paris"
+)
+candidats.to_csv("candidats.csv", index=False)
+mlflow.log_artifact("candidats.csv")
 
 # ─── Affichage ───
 
@@ -252,6 +280,9 @@ fig.update_layout(
     margin=dict(l=0, r=0, t=0, b=0),
 )
 st.plotly_chart(fig, width='stretch', config={"responsive": True})
+
+fig.write_html("carte_priorites.html")
+mlflow.log_artifact("carte_priorites.html")
 
 # Répartition par arrondissement
 col_bar, col_table = st.columns([3, 2])
