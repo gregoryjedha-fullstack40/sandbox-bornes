@@ -135,10 +135,7 @@ coords_rad = np.radians(coords)
 
 # eps en radians : distance_max en mètres / rayon Terre
 eps_rad = distance_max / 6_371_000
-
-with mlflow.start_run(run_name="DBSCAN_Paris"):
-    db = DBSCAN(eps=eps_rad, min_samples=min_bornes_cluster, metric="haversine")
-    mlflow.sklearn.log_model(db, "DBSCAN_Paris")
+db = DBSCAN(eps=eps_rad, min_samples=min_bornes_cluster, metric="haversine")
 
 bornes_clusters = db.fit_predict(coords_rad)
 mlflow.log_params({
@@ -204,19 +201,6 @@ candidats["arr_label"] = candidats["num_arrondissement"].apply(
     lambda x: f"{int(x)}{'er' if x == 1 else 'e'} arr."
 )
 
-mlflow.log_metrics({
-        "clusters": nb_clusters,
-        "noise_points": nb_bruit,
-        "candidate_zones": len(candidats),
-        "avg_priority": candidats["score_priorite"].mean()
-})
-mlflow.sklearn.log_model(
-        sk_model=db,
-        artifact_path="DBSCAN_Paris"
-)
-candidats.to_csv("candidats.csv", index=False)
-mlflow.log_artifact("candidats.csv")
-
 # ─── Affichage ───
 
 # KPIs
@@ -281,8 +265,23 @@ fig.update_layout(
 )
 st.plotly_chart(fig, width='stretch', config={"responsive": True})
 
-fig.write_html("carte_priorites.html")
-mlflow.log_artifact("carte_priorites.html")
+if st.button("Enregistrer dans MLflow"):
+    with mlflow.start_run(run_name="DBSCAN_Paris"):
+        mlflow.sklearn.log_model(db, "DBSCAN_Paris")
+        mlflow.log_metrics({
+                "clusters": nb_clusters,
+                "noise_points": nb_bruit,
+                "candidate_zones": len(candidats),
+                "avg_priority": candidats["score_priorite"].mean()
+        })
+        mlflow.sklearn.log_model(
+                sk_model=db,
+                artifact_path="DBSCAN_Paris"
+        )
+        candidats.to_csv("candidats.csv", index=False)
+        mlflow.log_artifact("candidats.csv")
+        fig.write_html("carte_priorites.html")
+        mlflow.log_artifact("carte_priorites.html")
 
 # Répartition par arrondissement
 col_bar, col_table = st.columns([3, 2])
