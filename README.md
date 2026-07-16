@@ -1,5 +1,5 @@
 ---
-title: Paris Bornes
+title: Paris Bornes Experiment
 emoji: 🚀
 colorFrom: red
 colorTo: red
