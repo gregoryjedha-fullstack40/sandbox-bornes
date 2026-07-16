@@ -283,6 +283,7 @@ if st.button("Enregistrer dans MLflow"):
         mlflow.log_artifact("candidats.csv")
         fig.write_html("carte_priorites.html")
         mlflow.log_artifact("carte_priorites.html")
+        mlflow.end_run()
 
 # Répartition par arrondissement
 col_bar, col_table = st.columns([3, 2])
