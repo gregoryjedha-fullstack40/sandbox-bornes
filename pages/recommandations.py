@@ -12,9 +12,7 @@ import os
 import sys
 import mlflow
 import mlflow.sklearn
-
-mlflow.set_tracking_uri("https://gregoryjedha-jedhaflow40.hf.space")
-mlflow.set_experiment("Bornes_DBSCAN")
+from datetime import datetime
 
 # Ajouter le dossier parent au path pour importer database
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -265,8 +263,11 @@ fig.update_layout(
 )
 st.plotly_chart(fig, width='stretch', config={"responsive": True})
 
+
 if st.button("Enregistrer dans MLflow"):
-    with mlflow.start_run(run_name="DBSCAN_Paris"):
+        mlflow.start_run(run_name="DBSCAN_Paris")
+        mlflow.set_tracking_uri("https://gregoryjedha-jedhaflow40.hf.space")
+        mlflow.set_experiment(f"Bornes_DBSCAN_{datetime.now():%Y%m%d}")
         mlflow.sklearn.log_model(db, "DBSCAN_Paris")
         mlflow.log_metrics({
                 "clusters": nb_clusters,

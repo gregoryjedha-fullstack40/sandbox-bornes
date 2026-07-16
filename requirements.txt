@@ -15,3 +15,5 @@ shapely
 scikit-learn
 stqdm
 mlflow==3.5.0
+airflow
+pytest
