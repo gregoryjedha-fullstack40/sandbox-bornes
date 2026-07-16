@@ -1,6 +1,6 @@
 import pytest
 import pandas as pd
-from etl import collect_data
+from etl import collect_data, extraire_num_arrondissement, parser_arrondissement
 
 import pytest
 import pandas as pd
@@ -115,4 +115,11 @@ def test_collect_data_irve():
     assert "longitude" in df2.columns
     assert "num_arrondissement" in df2.columns
 
+def test_num_arrondissement():
+    arr = extraire_num_arrondissement(mock_bornes()[0])
+    assert arr==12
+
+def test_parser_arrondissement():
+    arr = parser_arrondissement(mock_bornes[1]["code_insee_commune"])
+    assert arr==17
 
