@@ -268,10 +268,10 @@ if st.button("Enregistrer dans MLflow"):
     if mlflow.active_run() is not None:
         mlflow.end_run()
 
+    mlflow.set_tracking_uri("https://gregoryjedha-jedhaflow40.hf.space")
+    mlflow.set_experiment(f"Bornes_DBSCAN_{datetime.now():%Y%m%d}")
+
     with mlflow.start_run(run_name=f"DBSCAN_Paris_{datetime.now():%Y%m%d}"):
-        mlflow.set_tracking_uri("https://gregoryjedha-jedhaflow40.hf.space")
-        mlflow.set_experiment(f"Bornes_DBSCAN_{datetime.now():%Y%m%d}")
-        mlflow.sklearn.log_model(db, "DBSCAN_Paris")
         mlflow.log_metrics({
                 "clusters": nb_clusters,
                 "noise_points": nb_bruit,
@@ -286,7 +286,6 @@ if st.button("Enregistrer dans MLflow"):
         mlflow.log_artifact("candidats.csv")
         fig.write_html("carte_priorites.html")
         mlflow.log_artifact("carte_priorites.html")
-        mlflow.end_run()
 
 # Répartition par arrondissement
 col_bar, col_table = st.columns([3, 2])
