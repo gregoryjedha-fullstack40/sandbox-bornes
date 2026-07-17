@@ -271,21 +271,25 @@ if st.button("Enregistrer dans MLflow"):
     mlflow.set_tracking_uri("https://gregoryjedha-jedhaflow40.hf.space")
     mlflow.set_experiment(f"Bornes_DBSCAN_{datetime.now():%Y%m%d}")
 
-    with mlflow.start_run(run_name=f"DBSCAN_Paris_{datetime.now():%Y%m%d}"):
-        mlflow.log_metrics({
-                "clusters": nb_clusters,
-                "noise_points": nb_bruit,
-                "candidate_zones": len(candidats),
-                "avg_priority": candidats["score_priorite"].mean()
-        })
-        mlflow.sklearn.log_model(
-                sk_model=db,
-                artifact_path="DBSCAN_Paris"
-        )
-        candidats.to_csv("candidats.csv", index=False)
-        mlflow.log_artifact("candidats.csv")
-        fig.write_html("carte_priorites.html")
-        mlflow.log_artifact("carte_priorites.html")
+    try:
+        with mlflow.start_run(run_name=f"DBSCAN_Paris_{datetime.now():%Y%m%d}"):
+            mlflow.log_metrics({
+                    "clusters": nb_clusters,
+                    "noise_points": nb_bruit,
+                    "candidate_zones": len(candidats),
+                    "avg_priority": candidats["score_priorite"].mean()
+            })
+            mlflow.sklearn.log_model(
+                    sk_model=db,
+                    artifact_path="DBSCAN_Paris"
+            )
+            candidats.to_csv("candidats.csv", index=False)
+            mlflow.log_artifact("candidats.csv")
+            fig.write_html("carte_priorites.html")
+            mlflow.log_artifact("carte_priorites.html")
+        st.success("Run enregistré dans MLflow.")
+    except mlflow.exceptions.MlflowException as e:
+        st.error(f"Échec de l'enregistrement MLflow (serveur/artifact store indisponible) : {e}")
 
 # Répartition par arrondissement
 col_bar, col_table = st.columns([3, 2])
