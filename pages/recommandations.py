@@ -10,6 +10,7 @@ import plotly.express as px
 import json
 import os
 import sys
+import time
 import mlflow
 import mlflow.sklearn
 from datetime import datetime
@@ -264,6 +265,17 @@ fig.update_layout(
 st.plotly_chart(fig, width='stretch', config={"responsive": True})
 
 
+def _log_with_retry(fn, *args, retries=3, delay=2, **kwargs):
+    """Retry an MLflow call on transient server/artifact-store errors (ex: Space en train de se réveiller)."""
+    for attempt in range(1, retries + 1):
+        try:
+            return fn(*args, **kwargs)
+        except mlflow.exceptions.MlflowException:
+            if attempt == retries:
+                raise
+            time.sleep(delay * attempt)
+
+
 if st.button("Enregistrer dans MLflow"):
     if mlflow.active_run() is not None:
         mlflow.end_run()
@@ -273,21 +285,42 @@ if st.button("Enregistrer dans MLflow"):
 
     try:
         with mlflow.start_run(run_name=f"DBSCAN_Paris_{datetime.now():%Y%m%d}"):
-            mlflow.log_metrics({
+            _log_with_retry(mlflow.log_metrics, {
                     "clusters": nb_clusters,
                     "noise_points": nb_bruit,
                     "candidate_zones": len(candidats),
                     "avg_priority": candidats["score_priorite"].mean()
             })
-            mlflow.sklearn.log_model(
-                    sk_model=db,
-                    artifact_path="DBSCAN_Paris"
+
+            # Chaque artefact est loggé indépendamment : si l'un échoue (ex: artifact
+            # store temporairement indisponible), les autres et les métriques restent enregistrés.
+            artifact_errors = []
+            for label, upload in [
+                ("modèle DBSCAN", lambda: _log_with_retry(
+                    mlflow.sklearn.log_model, sk_model=db, artifact_path="DBSCAN_Paris"
+                )),
+                ("candidats.csv", lambda: (
+                    candidats.to_csv("candidats.csv", index=False),
+                    _log_with_retry(mlflow.log_artifact, "candidats.csv"),
+                )),
+                ("carte_priorites.html", lambda: (
+                    fig.write_html("carte_priorites.html"),
+                    _log_with_retry(mlflow.log_artifact, "carte_priorites.html"),
+                )),
+            ]:
+                try:
+                    upload()
+                except mlflow.exceptions.MlflowException as e:
+                    artifact_errors.append(f"{label} : {e}")
+
+        if artifact_errors:
+            st.warning(
+                "Run enregistré dans MLflow (métriques et paramètres inclus), mais certains "
+                "artefacts n'ont pas pu être uploadés après plusieurs tentatives (serveur/artifact "
+                "store indisponible) :\n" + "\n".join(f"- {err}" for err in artifact_errors)
             )
-            candidats.to_csv("candidats.csv", index=False)
-            mlflow.log_artifact("candidats.csv")
-            fig.write_html("carte_priorites.html")
-            mlflow.log_artifact("carte_priorites.html")
-        st.success("Run enregistré dans MLflow.")
+        else:
+            st.success("Run enregistré dans MLflow.")
     except mlflow.exceptions.MlflowException as e:
         st.error(f"Échec de l'enregistrement MLflow (serveur/artifact store indisponible) : {e}")
 
