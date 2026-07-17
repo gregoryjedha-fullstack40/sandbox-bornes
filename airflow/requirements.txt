@@ -1,0 +1,14 @@
+# Providers Airflow (connexions Postgres & AWS/S3)
+apache-airflow-providers-postgres
+apache-airflow-providers-amazon
+
+# Data
+pandas>=2.0
+requests>=2.31.0,<3
+openpyxl
+psycopg2-binary
+
+# MLOps (aligné avec le bloc 3)
+mlflow==3.5.0
+scikit-learn==1.6.1
+boto3

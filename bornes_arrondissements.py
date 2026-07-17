@@ -168,68 +168,74 @@ def evolution_parc_ve(df_vehicules):
     evolution["taux_ve"] = (evolution["nb_ve"] / evolution["nb_vp_total"] * 100).round(2)    
     return evolution
 
-population = etl.recuperer_population()
-stations_belib = etl.recuperer_liste_stations_belib()
-stations_gireve = etl.recuperer_liste_stations_gireve()
-listestations = etl.fusionner_sources(stations_belib, stations_gireve)
-listestations.to_csv("./data/stations_paris.csv", index=False)
-liste_ve = etl.recuperer_vehicules_electriques()
-pression = calculer_pression(listestations,liste_ve)
-energie = etl.enedis_paris_data(2022)
-population = etl.recuperer_population()
+def uploadS3():
+    population = etl.recuperer_population()
+    stations_belib = etl.recuperer_liste_stations_belib()
+    stations_gireve = etl.recuperer_liste_stations_gireve()
+    listestations = etl.fusionner_sources(stations_belib, stations_gireve)
+    listestations.to_csv("./data/stations_paris.csv", index=False)
+    liste_ve = etl.recuperer_vehicules_electriques()
+    pression = calculer_pression(listestations,liste_ve)
+    energie = etl.enedis_paris_data(2022)
+    population = etl.recuperer_population()
 
-if not listestations.empty:
-    database.sauvegarder_totalite_bornes(listestations)
+    if not listestations.empty:
+        database.sauvegarder_totalite_bornes(listestations)
 
-    if not pression.empty:
-        database.sauvegarder_pression(pression)
+        if not pression.empty:
+            database.sauvegarder_pression(pression)
 
-    if not energie.empty:
-        database.sauvegarder_energie(energie)
-    
-    if not population.empty:
-        database.sauvegarder_population(population)
-else:
-    print("Aucune station de recharge n'a pu être affichée sur la carte.")
+        if not energie.empty:
+            database.sauvegarder_energie(energie)
+        
+        if not population.empty:
+            database.sauvegarder_population(population)
+    else:
+        print("Aucune station de recharge n'a pu être affichée sur la carte.")
 
-energie_par_arr = energie.groupby("num_arrondissement").agg(
-    conso_totale_mwh=("conso_totale_mwh", "sum"),
-    nb_sites=("nb_sites", "sum"),
-).reset_index()
+    energie_par_arr = energie.groupby("num_arrondissement").agg(
+        conso_totale_mwh=("conso_totale_mwh", "sum"),
+        nb_sites=("nb_sites", "sum"),
+    ).reset_index()
 
-# Après le calcul de pression
-df_arrdt, df_paris = calculer_projections(pression, energie_par_arr)
+    # Après le calcul de pression
+    df_arrdt, df_paris = calculer_projections(pression, energie_par_arr)
 
-# Sauvegarder les CSV pour streamlit_additions.py
-df_arrdt.to_csv("./data/energie_by_arrdt.csv", index=False)
-df_paris.to_csv("./data/soutenabilite_scenarios.csv", index=False)
+    # Sauvegarder les CSV pour streamlit_additions.py
+    df_arrdt.to_csv("./data/energie_by_arrdt.csv", index=False)
+    df_paris.to_csv("./data/soutenabilite_scenarios.csv", index=False)
 
-# Sauvegarder en SQLite aussi
-database.sauvegarder_projections(df_arrdt, df_paris)
+    # Sauvegarder en SQLite aussi
+    database.sauvegarder_projections(df_arrdt, df_paris)
 
 
-print("Projections sauvegardées")
+    print("Projections sauvegardées")
 
-# Upload S3
-S3_BUCKET = os.environ.get("S3_BUCKET", "")
-if S3_BUCKET:
-    
-    s3 = boto3.client("s3", region_name=os.environ.get("AWS_REGION", "eu-north-1"))
-    run_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    
-    fichiers = {
-        "bornes": "./data/stations_paris.csv",
-        "pression": "./data/pression_paris.csv",
-        "vehicules": "./data/vehicules_electriques_paris_ORE.csv",
-        "energie": "./data/energie_paris.csv",
-    }
-    
-    for nom, chemin in fichiers.items():
-        if os.path.exists(chemin):
-            cle = f"raw/data/{nom}.csv"
-            s3.upload_file(chemin, S3_BUCKET, cle)
-            os.remove(chemin)
-            print(f"Uploadé s3://{S3_BUCKET}/{cle}")
-else:
-    print("S3 non configuré, sauvegarde locale uniquement")
+    # Upload S3
+    S3_BUCKET = os.environ.get("S3_BUCKET", "")
+    if S3_BUCKET:
+        
+        s3 = boto3.client("s3", region_name=os.environ.get("AWS_REGION", "eu-north-1"))
+        run_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        
+        fichiers = {
+            "bornes": "./data/stations_paris.csv",
+            "pression": "./data/pression_paris.csv",
+            "vehicules": "./data/vehicules_electriques_paris_ORE.csv",
+            "energie": "./data/energie_paris.csv",
+        }
+        
+        for nom, chemin in fichiers.items():
+            if os.path.exists(chemin):
+                cle = f"raw/data/{nom}.csv"
+                s3.upload_file(chemin, S3_BUCKET, cle)
+                os.remove(chemin)
+                print(f"Uploadé s3://{S3_BUCKET}/{cle}")
 
+        return True
+    else:
+        print("S3 non configuré, sauvegarde locale uniquement")
+        return False
+        
+
+uploadS3()
