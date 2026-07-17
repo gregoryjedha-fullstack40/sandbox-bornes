@@ -265,15 +265,20 @@ fig.update_layout(
 st.plotly_chart(fig, width='stretch', config={"responsive": True})
 
 
-def _log_with_retry(fn, *args, retries=3, delay=2, **kwargs):
-    """Retry an MLflow call on transient server/artifact-store errors (ex: Space en train de se réveiller)."""
+def _log_with_retry(fn, *args, retries=6, delay=3, max_delay=20, **kwargs):
+    """Retry an MLflow call on transient server/artifact-store errors.
+
+    Un Space HF endormi peut mettre 30 à 60s à répondre correctement après
+    son réveil (500 en attendant) : backoff exponentiel plafonné pour laisser
+    ce temps de réveil plutôt qu'abandonner après quelques secondes.
+    """
     for attempt in range(1, retries + 1):
         try:
             return fn(*args, **kwargs)
         except mlflow.exceptions.MlflowException:
             if attempt == retries:
                 raise
-            time.sleep(delay * attempt)
+            time.sleep(min(delay * 2 ** (attempt - 1), max_delay))
 
 
 if st.button("Enregistrer dans MLflow"):
