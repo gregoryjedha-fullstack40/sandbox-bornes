@@ -11,7 +11,7 @@ pinned: false
 short_description: Prioriser les zones d'installation des bornes de recharge
 ---
 
-# Welcome to Streamlit!
+# Welcome to Streamlit !
 
 Edit `/src/streamlit_app.py` to customize this app to your heart's desire. :heart:
 
