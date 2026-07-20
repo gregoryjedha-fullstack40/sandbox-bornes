@@ -1,0 +1,16 @@
+scenario,horizon_years,deficit_total
+bas,1,4320.0
+bas,2,6095.0
+bas,3,8800.0
+bas,4,12067.0
+bas,5,15990.0
+central,1,5789.0
+central,2,10994.0
+central,3,18406.0
+central,4,28868.0
+central,5,43709.0
+haut,1,7590.0
+haut,2,16667.0
+haut,3,31313.0
+haut,4,55101.0
+haut,5,93218.0

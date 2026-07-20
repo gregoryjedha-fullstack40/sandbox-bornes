@@ -176,6 +176,8 @@ def uploadS3():
     listestations.to_csv("./data/stations_paris.csv", index=False)
     liste_ve = etl.recuperer_vehicules_electriques()
     pression = calculer_pression(listestations,liste_ve)
+    if not pression.empty:
+        pression.to_csv("./data/pression_paris.csv", index=False)
     energie = etl.enedis_paris_data(2022)
     population = etl.recuperer_population()
 
@@ -236,6 +238,3 @@ def uploadS3():
     else:
         print("S3 non configuré, sauvegarde locale uniquement")
         return False
-        
-
-uploadS3()

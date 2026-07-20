@@ -18,12 +18,17 @@ AWS_REGION = os.environ.get("AWS_REGION", "eu-north-1")
 
 
 def collect_data(source, fromdate=None, todate=None, force=False):
-    df = lecture_web(source)
+    if force:
+        df = lecture_web(source)
+    else:
+        df = lecture_s3(source)
+        if df is None:
+            df = lecture_web(source)
     if df is not None:
         return df
     else:
-    #Cas extrême si aucune des trois sources ne fonctionne on renvoie une erreur
-        print(f"Ni S3, ni API web, ni Airflow n'ont fonctionné pour {source}")
+    #Cas extrême si aucune des deux sources ne fonctionne on renvoie une erreur
+        print(f"Ni S3, ni API web n'ont fonctionné pour {source}")
         return None
 
 def lecture_s3(source):
@@ -438,6 +443,7 @@ def enedis_paris_data(annee, force=False):
     if S3_BUCKET and not force:
         df = lecture_s3("energie")
         if df is not None:
+            df.to_csv("./data/energie_paris.csv", index=False, encoding="utf-8-sig")
             return df
 
     base_url = (
