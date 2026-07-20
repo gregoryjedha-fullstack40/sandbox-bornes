@@ -13,3 +13,6 @@ airflow/logs/
 airflow/data/
 airflow/dags/__pycache__/
 airflow/dags/desktop.ini
+
+bornes.db
+*.db
