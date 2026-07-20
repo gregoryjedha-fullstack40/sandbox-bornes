@@ -144,7 +144,7 @@ def charger_donnees():
             LEFT JOIN pression pr ON e.num_arrondissement = pr.num_arrondissement
             ORDER BY e.num_arrondissement
             """, engine)
-        return data
+    return data
 
 
 @st.cache_data(ttl=3600)
