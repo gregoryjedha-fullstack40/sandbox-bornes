@@ -170,15 +170,17 @@ def evolution_parc_ve(df_vehicules):
 
 def uploadS3():
     population = etl.recuperer_population()
-    stations_belib = etl.recuperer_liste_stations_belib()
-    stations_gireve = etl.recuperer_liste_stations_gireve()
+    stations_belib = etl.recuperer_liste_stations_belib(maj_airflow=True)
+    stations_gireve = etl.recuperer_liste_stations_gireve(force=True)
     listestations = etl.fusionner_sources(stations_belib, stations_gireve)
     listestations.to_csv("./data/stations_paris.csv", index=False)
     liste_ve = etl.recuperer_vehicules_electriques()
     pression = calculer_pression(listestations,liste_ve)
     if not pression.empty:
         pression.to_csv("./data/pression_paris.csv", index=False)
-    energie = etl.enedis_paris_data(2022)
+    # force=True : sinon enedis_paris_data relit sa propre sortie précédente
+    # sur S3 (raw/data/energie.csv) et le CSV energie ne se met jamais à jour.
+    energie = etl.enedis_paris_data(2022, force=True)
     population = etl.recuperer_population()
 
     if not listestations.empty:

@@ -1,10 +1,11 @@
 """DAG de collecte des données Bornes VE Paris + entraînement DBSCAN.
 
 Deux tâches :
-1. reimport_data — appelle etl.force_reimport(), qui recollecte toutes les
-   sources (Belib', Gireve/IRVE, Enedis, population, VE), calcule la pression
-   et les projections, puis persiste tout dans bornes.db (SQLite, sur le
-   volume monté du repo) via database.sauvegarder_*.
+1. reimport_data — appelle bornes_arrondissements.uploadS3(), qui recollecte
+   toutes les sources (Belib', Gireve/IRVE, Enedis, population, VE) en forçant
+   la collecte "live" (pas de lecture du cache S3), calcule la pression et les
+   projections, persiste tout dans bornes.db (SQLite) via database.sauvegarder_*,
+   puis uploade les CSV rafraîchis sur S3.
 2. train_dbscan — relit la table `bornes` fraîchement écrite, entraîne un
    DBSCAN sur les coordonnées des points de charge (mêmes paramètres que
    pages/recommandations.py) et logue paramètres, métriques et modèle sur le
@@ -50,7 +51,7 @@ default_args = {
 }
 
 
-def _setup():
+def _setup_bornes():
     """Importe etl une fois le sys.path prêt, et se place dans le repo.
 
     etl.py et database.py écrivent des fichiers sous "./data/..." et
@@ -85,8 +86,8 @@ def _log_with_retry(fn, *args, retries=6, delay=3, max_delay=20, **kwargs):
 
 @dag(
     dag_id="collecte_bornes_ve_paris",
-    description="Recollecte les données Bornes VE Paris (etl.force_reimport) puis entraîne "
-                "et logue un modèle DBSCAN sur MLflow (jedhaflow40).",
+    description="Recollecte les données Bornes VE Paris (bornes_arrondissements.uploadS3) puis "
+                "entraîne et logue un modèle DBSCAN sur MLflow (jedhaflow40).",
     schedule="0 5,14 * * *",  # tous les jours à 5h (heure du worker) — ajuster si besoin
     start_date=datetime(2026, 1, 1),
     catchup=False,
@@ -97,7 +98,7 @@ def collecte_bornes_ve_paris():
 
     @task
     def reimport_data() -> None:
-        extraction = _setup()
+        extraction = _setup_bornes()
         extraction.uploadS3()
 
     @task
@@ -107,7 +108,7 @@ def collecte_bornes_ve_paris():
         import mlflow.sklearn
         from sklearn.cluster import DBSCAN
 
-        _setup()
+        _setup_bornes()
         import database
 
         df = database.charger_bornes()
