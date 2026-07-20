@@ -232,7 +232,7 @@ def recuperer_liste_stations_belib(maj_airflow=False):
     """Récupère la liste unique des stations Belib' avec statut actuel."""
     print("Récupération des données Belib'.")
     
-    listestations = collect_data(source="belib_stat")
+    listestations = collect_data(source="belib_stat", force=maj_airflow)
     if listestations is None or listestations.empty:
         return None
     listestations["num_arrondissement"] = listestations["adresse_station"].apply(extraire_num_arrondissement)
