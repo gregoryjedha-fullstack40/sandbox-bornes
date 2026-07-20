@@ -31,3 +31,16 @@ jobs:
           PYTHONPATH: .
         run: |
           pytest -v
+      
+deploy:
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Push to HF Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git push https://gregoryjedha:$HF_TOKEN@huggingface.co/spaces/gregoryjedha/sandbox-bornes main

@@ -109,7 +109,7 @@ def _silhouette_or_none(coords_rad, labels):
     dag_id="collecter_bornes",
     description="Recollecte les données Bornes VE Paris (bornes_arrondissements.uploadS3) puis "
                 "entraîne et logue un modèle DBSCAN sur MLflow (jedhaflow40).",
-    schedule="0 5,14 * * *",  # tous les jours à 5h (heure du worker) — ajuster si besoin
+    schedule="0 5,14 * * *",  # tous les jours à 5h et 14h (heure du worker) — ajuster si besoin
     start_date=datetime(2026, 1, 1),
     catchup=False,
     default_args=default_args,
@@ -129,6 +129,51 @@ def collecte_bornes_ve_paris():
         import mlflow.sklearn
         from mlflow.tracking import MlflowClient
         from sklearn.cluster import DBSCAN
+        from sklearn.metrics import silhouette_score
+
+        MODEL_NAME = "dbscan_bornes"
+        client = MlflowClient()
+
+        def evaluate(labels, X):
+            mask = labels != -1
+            n_clusters = len(set(labels[mask]))
+            if n_clusters < 2 or mask.sum() <= n_clusters:
+                return float("nan")
+            return silhouette_score(X[mask], labels[mask], metric="haversine")
+
+        def alias_metric(alias):
+            try:
+                mv = client.get_model_version_by_alias(MODEL_NAME, alias)
+            except Exception:
+                return None                      # alias absent (ton cas "production not found")
+            return client.get_run(mv.run_id).data.metrics.get("silhouette")
+
+        run = mlflow.start_run()
+        try:
+            model = DBSCAN(eps=..., min_samples=...).fit(X)
+            score = evaluate(model.labels_, X)
+
+            # validation MÉTIER : c'est ICI qu'on décide ce qui compte comme "réussi"
+            if np.isnan(score):
+                raise ValueError("Clustering dégénéré (< 2 clusters exploitables)")
+
+            mlflow.log_metric("silhouette", score)
+            mlflow.sklearn.log_model(model, "model")
+            mv = mlflow.register_model(f"runs:/{run.info.run_id}/model", MODEL_NAME)
+
+            # 1) le nouveau est toujours challenger
+            client.set_registered_model_alias(MODEL_NAME, "challenger", mv.version)
+
+            # 2) promu production seulement s'il bat l'actuel (ou s'il n'y a pas de prod)
+            prod = alias_metric("production")
+            if prod is None or score > prod:
+                client.set_registered_model_alias(MODEL_NAME, "production", mv.version)
+
+            mlflow.end_run(status="FINISHED")
+        except Exception as e:
+            mlflow.set_tag("failure_reason", str(e))
+            mlflow.end_run(status="FAILED")
+            raise
 
         _setup_bornes()
         import database
