@@ -66,13 +66,7 @@ def _setup_bornes():
 
 
 def _log_with_retry(fn, *args, retries=6, delay=3, max_delay=20, **kwargs):
-    """Retry an MLflow call on transient server/artifact-store errors.
-
-    Un Space HF endormi peut mettre 30 à 60s à répondre correctement après
-    son réveil (500 en attendant) : backoff exponentiel plafonné pour laisser
-    ce temps de réveil plutôt qu'abandonner après quelques secondes. Même
-    logique que pages/recommandations.py.
-    """
+   
     import mlflow
 
     for attempt in range(1, retries + 1):
@@ -85,7 +79,7 @@ def _log_with_retry(fn, *args, retries=6, delay=3, max_delay=20, **kwargs):
 
 
 @dag(
-    dag_id="collecte_bornes_ve_paris",
+    dag_id="collecter_bornes",
     description="Recollecte les données Bornes VE Paris (bornes_arrondissements.uploadS3) puis "
                 "entraîne et logue un modèle DBSCAN sur MLflow (jedhaflow40).",
     schedule="0 5,14 * * *",  # tous les jours à 5h (heure du worker) — ajuster si besoin
