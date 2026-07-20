@@ -324,7 +324,9 @@ def recuperer_vehicules_electriques():
     url = ("https://opendata.agenceore.fr/api/explore/v2.1/catalog/datasets/"
            "voitures-par-commune-par-energie/exports/csv"
            "?use_labels=false&delimiter=%3B")
-    url1 = pd.read_csv(url, sep=";", low_memory=False)
+    response = requests.get(url, timeout=300)
+    response.raise_for_status()
+    url1 = pd.read_csv(io.StringIO(response.text), sep=";", low_memory=False)
     url1["codgeo"] = url1["codgeo"].astype(str)
     url1 = url1[url1["codgeo"].str.match(r"^751(0[1-9]|1[0-9]|20)$")]
     url1["num_arrondissement"] = url1["codgeo"].str[-2:].astype(int)

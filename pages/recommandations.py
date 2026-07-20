@@ -281,7 +281,7 @@ def _log_with_retry(fn, *args, retries=6, delay=3, max_delay=20, **kwargs):
             time.sleep(min(delay * 2 ** (attempt - 1), max_delay))
 
 
-if st.button("Enregistrer dans MLflow"):
+"""if st.button("Enregistrer dans MLflow"):
     if mlflow.active_run() is not None:
         mlflow.end_run()
 
@@ -328,6 +328,7 @@ if st.button("Enregistrer dans MLflow"):
             st.success("Run enregistré dans MLflow.")
     except mlflow.exceptions.MlflowException as e:
         st.error(f"Échec de l'enregistrement MLflow (serveur/artifact store indisponible) : {e}")
+"""
 
 # Répartition par arrondissement
 col_bar, col_table = st.columns([3, 2])
