@@ -125,13 +125,14 @@ def collecte_bornes_ve_paris():
     @task
     def train_dbscan() -> None:
         import numpy as np
+        import pandas as pd
         import mlflow
         import mlflow.sklearn
         from mlflow.tracking import MlflowClient
         from sklearn.cluster import DBSCAN
         from sklearn.metrics import silhouette_score
 
-        MODEL_NAME = "dbscan_bornes"
+        MODEL_NAME = "DBSCAN_PARIS"
         client = MlflowClient()
 
         def evaluate(labels, X):
@@ -150,7 +151,15 @@ def collecte_bornes_ve_paris():
 
         run = mlflow.start_run()
         try:
-            model = DBSCAN(eps=..., min_samples=...).fit(X)
+            # 1. Relire les données que reimport_data a écrites sur S3
+            df = pd.read_csv("s3://parisbornes-jedha/raw/data/bornes.csv",storage_options={"client_kwargs": {"region_name": "eu-north-1"}},)
+
+            # 2. Construire X : matrice (n, 2) de [latitude, longitude]
+            #    haversine attend des RADIANS, pas des degrés
+            X = np.radians(df[["latitude", "longitude"]].to_numpy())   # <-- TES noms de colonnes
+
+            # 3. Entraîner. eps en radians : 0.00015 rad ≈ 950 m
+            model = DBSCAN(eps=0.00015, min_samples=5, metric="haversine").fit(X)
             score = evaluate(model.labels_, X)
 
             # validation MÉTIER : c'est ICI qu'on décide ce qui compte comme "réussi"
@@ -198,7 +207,7 @@ def collecte_bornes_ve_paris():
 
         client = MlflowClient()
 
-        with mlflow.start_run(run_name=f"DBSCAN_Paris_Airflow_{datetime.now():%Y%m%d_%H%M}"):
+        with mlflow.start_run(run_name=f"DBSCAN_Paris_{datetime.now():%Y%m%d_%H%M}"):
             _log_with_retry(mlflow.log_params, {
                 "eps_m": DBSCAN_EPS_METERS,
                 "eps_rad": eps_rad,
