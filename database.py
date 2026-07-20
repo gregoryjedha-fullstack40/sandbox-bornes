@@ -42,9 +42,8 @@ def assurer_donnees_disponibles():
 
     if besoin_init:
         os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
-        script = os.path.join(BASE_DIR, "bornes_arrondissements.py")
-        if os.path.exists(script):
-            exec(open(script).read(), {"__name__": "__main__"})
+        import etl
+        etl.force_reimport()
 
 def sauvegarder_bornes(df):
     """Insérer ou mettre à jour les points de charge (ou bornes) depuis notre DataFrame harmonisé."""
