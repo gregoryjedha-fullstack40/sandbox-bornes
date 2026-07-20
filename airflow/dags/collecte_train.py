@@ -9,7 +9,11 @@ Deux tâches :
 2. train_dbscan — relit la table `bornes` fraîchement écrite, entraîne un
    DBSCAN sur les coordonnées des points de charge (mêmes paramètres que
    pages/recommandations.py) et logue paramètres, métriques et modèle sur le
-   serveur MLflow "jedhaflow40".
+   serveur MLflow "jedhaflow40". Le modèle est enregistré dans le Model
+   Registry sous le nom `DBSCAN_Paris` et tagué "challenger" ; s'il obtient un
+   meilleur silhouette score (hors points de bruit) que la version taguée
+   "production", il devient la nouvelle "production". pages/recommandations.py
+   charge ensuite `models:/DBSCAN_Paris@production` pour ses prédictions.
 
 Pré-requis d'environnement (à définir sur les workers Airflow) :
 - BORNES_PROJECT_DIR : chemin absolu du checkout de ce repo (pour
@@ -42,6 +46,11 @@ MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "https://gregoryjedh
 DBSCAN_EPS_METERS = 300
 DBSCAN_MIN_SAMPLES = 2
 
+# Nom sous lequel le modèle DBSCAN est enregistré dans le Model Registry MLflow.
+# pages/recommandations.py charge la version taguée "production" via
+# models:/{REGISTERED_MODEL_NAME}@production.
+REGISTERED_MODEL_NAME = "DBSCAN_Paris"
+
 default_args = {
     "owner": "data-team",
     "retries": 3,
@@ -66,7 +75,7 @@ def _setup_bornes():
 
 
 def _log_with_retry(fn, *args, retries=6, delay=3, max_delay=20, **kwargs):
-   
+
     import mlflow
 
     for attempt in range(1, retries + 1):
@@ -76,6 +85,24 @@ def _log_with_retry(fn, *args, retries=6, delay=3, max_delay=20, **kwargs):
             if attempt == retries:
                 raise
             time.sleep(min(delay * 2 ** (attempt - 1), max_delay))
+
+
+def _silhouette_or_none(coords_rad, labels):
+    """Silhouette score (haversine) sur les points non-bruit, ou None si non calculable.
+
+    Sert de métrique de qualité pour comparer un modèle "challenger" au modèle
+    "production" en place : nécessite au moins 2 clusters distincts et 3 points
+    non-bruit, sinon silhouette_score lève une ValueError.
+    """
+    from sklearn.metrics import silhouette_score
+
+    mask = labels != -1
+    if mask.sum() < 3 or len(set(labels[mask])) < 2:
+        return None
+    try:
+        return float(silhouette_score(coords_rad[mask], labels[mask], metric="haversine"))
+    except ValueError:
+        return None
 
 
 @dag(
@@ -100,6 +127,7 @@ def collecte_bornes_ve_paris():
         import numpy as np
         import mlflow
         import mlflow.sklearn
+        from mlflow.tracking import MlflowClient
         from sklearn.cluster import DBSCAN
 
         _setup_bornes()
@@ -115,12 +143,15 @@ def collecte_bornes_ve_paris():
 
         nb_clusters = len(set(labels)) - (1 if -1 in labels else 0)
         nb_bruit = int((labels == -1).sum())
+        silhouette = _silhouette_or_none(coords_rad, labels)
 
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
         mlflow.set_experiment(f"Bornes_DBSCAN_{datetime.now():%Y%m%d}")
 
         if mlflow.active_run() is not None:
             mlflow.end_run()
+
+        client = MlflowClient()
 
         with mlflow.start_run(run_name=f"DBSCAN_Paris_Airflow_{datetime.now():%Y%m%d_%H%M}"):
             _log_with_retry(mlflow.log_params, {
@@ -130,11 +161,53 @@ def collecte_bornes_ve_paris():
                 "metric": "haversine",
                 "nb_bornes": len(df),
             })
-            _log_with_retry(mlflow.log_metrics, {
-                "clusters": nb_clusters,
-                "noise_points": nb_bruit,
-            })
-            _log_with_retry(mlflow.sklearn.log_model, sk_model=model, artifact_path="DBSCAN_Paris")
+            metrics = {"clusters": nb_clusters, "noise_points": nb_bruit}
+            if silhouette is not None:
+                metrics["silhouette"] = silhouette
+            _log_with_retry(mlflow.log_metrics, metrics)
+
+            model_info = _log_with_retry(
+                mlflow.sklearn.log_model,
+                sk_model=model,
+                artifact_path="DBSCAN_Paris",
+                registered_model_name=REGISTERED_MODEL_NAME,
+            )
+
+        # ─── Comparaison challenger vs production ───
+        # Le modèle qu'on vient d'entraîner devient le "challenger" du registry.
+        # S'il fait mieux que la version taguée "production" (silhouette plus
+        # élevée sur les points non-bruit), il devient la nouvelle "production".
+        # S'il n'existe pas encore de "production" (premier run), on promeut
+        # directement le challenger.
+        new_version = str(model_info.registered_model_version)
+        _log_with_retry(
+            client.set_registered_model_alias, REGISTERED_MODEL_NAME, "challenger", new_version
+        )
+
+        try:
+            # Peu de retries ici : une absence d'alias "production" (premier run)
+            # est une réponse "not found" normale, pas une erreur transitoire à
+            # ré-essayer en boucle.
+            prod_version = _log_with_retry(
+                client.get_model_version_by_alias,
+                REGISTERED_MODEL_NAME, "production",
+                retries=2, delay=2, max_delay=4,
+            )
+            prod_run = client.get_run(prod_version.run_id)
+            prod_silhouette = prod_run.data.metrics.get("silhouette")
+        except mlflow.exceptions.MlflowException:
+            prod_version = None
+            prod_silhouette = None
+
+        promote = prod_version is None or (
+            silhouette is not None and (prod_silhouette is None or silhouette > prod_silhouette)
+        )
+
+        if promote:
+            _log_with_retry(
+                client.set_registered_model_alias, REGISTERED_MODEL_NAME, "production", new_version
+            )
+            _log_with_retry(client.delete_registered_model_alias, REGISTERED_MODEL_NAME, "challenger")
 
     reimport_data() >> train_dbscan()
 

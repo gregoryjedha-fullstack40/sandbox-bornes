@@ -125,26 +125,70 @@ with st.spinner("Génération de la grille intra-muros..."):
 # ─── Étape 2 : DBSCAN sur les bornes existantes ───
 # On identifie les clusters de bornes (zones bien couvertes)
 # et les points de bruit (bornes isolées).
+#
+# Le modèle réutilisé est celui taggé "production" dans le MLflow Model
+# Registry (entraîné et validé par le DAG collecter_bornes, cf.
+# airflow/dags/collecte_train.py), plutôt qu'un DBSCAN ad hoc recréé ici.
+# DBSCAN n'a pas de predict() pour des points hors échantillon : on réutilise
+# l'objet (et son eps) pour un fit_predict cohérent avec la version validée,
+# en laissant l'utilisateur ajuster min_samples via le curseur de la barre
+# latérale.
 
 from sklearn.cluster import DBSCAN
 from sklearn.neighbors import BallTree
 
+MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "https://gregoryjedha-jedhaflow40.hf.space")
+REGISTERED_MODEL_NAME = "DBSCAN_Paris"
+
+
+def _log_with_retry(fn, *args, retries=6, delay=3, max_delay=20, **kwargs):
+    """Retry an MLflow call on transient server/artifact-store errors.
+
+    Un Space HF endormi peut mettre 30 à 60s à répondre correctement après
+    son réveil (500 en attendant) : backoff exponentiel plafonné pour laisser
+    ce temps de réveil plutôt qu'abandonner après quelques secondes.
+    """
+    for attempt in range(1, retries + 1):
+        try:
+            return fn(*args, **kwargs)
+        except mlflow.exceptions.MlflowException:
+            if attempt == retries:
+                raise
+            time.sleep(min(delay * 2 ** (attempt - 1), max_delay))
+
+
+@st.cache_resource(ttl=300)
+def charger_modele_production():
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    return _log_with_retry(
+        mlflow.sklearn.load_model,
+        f"models:/{REGISTERED_MODEL_NAME}@production",
+        retries=3,
+        delay=2,
+        max_delay=8,
+    )
+
+
 coords = bornes[["latitude", "longitude"]].values
 coords_rad = np.radians(coords)
 
-# eps en radians : distance_max en mètres / rayon Terre
-eps_rad = distance_max / 6_371_000
-db = DBSCAN(eps=eps_rad, min_samples=min_bornes_cluster, metric="haversine")
+try:
+    with st.spinner("Chargement du modèle DBSCAN de production (MLflow)..."):
+        db = charger_modele_production()
+    db.min_samples = min_bornes_cluster
+except Exception as e:
+    st.warning(
+        "Modèle de production MLflow indisponible (serveur injoignable ou pas encore "
+        f"entraîné) : calcul d'un DBSCAN local à la place. Détail : {e}"
+    )
+    eps_rad_defaut = distance_max / 6_371_000
+    db = DBSCAN(eps=eps_rad_defaut, min_samples=min_bornes_cluster, metric="haversine")
+
+# eps du modèle chargé (production) ou par défaut si repli local, en mètres
+eps_rad = db.eps
+distance_max = round(eps_rad * 6_371_000)
 
 bornes_clusters = db.fit_predict(coords_rad)
-mlflow.log_params({
-        "eps_m": distance_max,
-        "eps_rad": eps_rad,
-        "min_samples": min_bornes_cluster,
-        "metric": "haversine",
-        "resolution": resolution,
-        "poids_pression": poids_pression
-})
 
 nb_clusters = len(set(bornes_clusters)) - (1 if -1 in bornes_clusters else 0)
 nb_bruit = (bornes_clusters == -1).sum()
@@ -263,22 +307,6 @@ fig.update_layout(
     margin=dict(l=0, r=0, t=0, b=0),
 )
 st.plotly_chart(fig, width='stretch', config={"responsive": True})
-
-
-def _log_with_retry(fn, *args, retries=6, delay=3, max_delay=20, **kwargs):
-    """Retry an MLflow call on transient server/artifact-store errors.
-
-    Un Space HF endormi peut mettre 30 à 60s à répondre correctement après
-    son réveil (500 en attendant) : backoff exponentiel plafonné pour laisser
-    ce temps de réveil plutôt qu'abandonner après quelques secondes.
-    """
-    for attempt in range(1, retries + 1):
-        try:
-            return fn(*args, **kwargs)
-        except mlflow.exceptions.MlflowException:
-            if attempt == retries:
-                raise
-            time.sleep(min(delay * 2 ** (attempt - 1), max_delay))
 
 
 """if st.button("Enregistrer dans MLflow"):
