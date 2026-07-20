@@ -309,55 +309,6 @@ fig.update_layout(
 st.plotly_chart(fig, width='stretch', config={"responsive": True})
 
 
-"""if st.button("Enregistrer dans MLflow"):
-    if mlflow.active_run() is not None:
-        mlflow.end_run()
-
-    mlflow.set_tracking_uri("https://gregoryjedha-jedhaflow40.hf.space")
-    mlflow.set_experiment(f"Bornes_DBSCAN_{datetime.now():%Y%m%d}")
-
-    try:
-        with mlflow.start_run(run_name=f"DBSCAN_Paris_{datetime.now():%Y%m%d}"):
-            _log_with_retry(mlflow.log_metrics, {
-                    "clusters": nb_clusters,
-                    "noise_points": nb_bruit,
-                    "candidate_zones": len(candidats),
-                    "avg_priority": candidats["score_priorite"].mean()
-            })
-
-            # Chaque artefact est loggé indépendamment : si l'un échoue (ex: artifact
-            # store temporairement indisponible), les autres et les métriques restent enregistrés.
-            artifact_errors = []
-            for label, upload in [
-                ("modèle DBSCAN", lambda: _log_with_retry(
-                    mlflow.sklearn.log_model, sk_model=db, artifact_path="DBSCAN_Paris"
-                )),
-                ("candidats.csv", lambda: (
-                    candidats.to_csv("candidats.csv", index=False),
-                    _log_with_retry(mlflow.log_artifact, "candidats.csv"),
-                )),
-                ("carte_priorites.html", lambda: (
-                    fig.write_html("carte_priorites.html"),
-                    _log_with_retry(mlflow.log_artifact, "carte_priorites.html"),
-                )),
-            ]:
-                try:
-                    upload()
-                except mlflow.exceptions.MlflowException as e:
-                    artifact_errors.append(f"{label} : {e}")
-
-        if artifact_errors:
-            st.warning(
-                "Run enregistré dans MLflow (métriques et paramètres inclus), mais certains "
-                "artefacts n'ont pas pu être uploadés après plusieurs tentatives (serveur/artifact "
-                "store indisponible) :\n" + "\n".join(f"- {err}" for err in artifact_errors)
-            )
-        else:
-            st.success("Run enregistré dans MLflow.")
-    except mlflow.exceptions.MlflowException as e:
-        st.error(f"Échec de l'enregistrement MLflow (serveur/artifact store indisponible) : {e}")
-"""
-
 # Répartition par arrondissement
 col_bar, col_table = st.columns([3, 2])
 
