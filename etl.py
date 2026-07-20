@@ -21,6 +21,8 @@ def collect_data(source, fromdate=None, todate=None, force=False):
     if force:
         df = lecture_web(source)
     else:
+        if  source in ['belib_rt','belib_stat','irve_conso','irve_dyn']:
+            source = "bornes"
         df = lecture_s3(source)
         if df is None:
             df = lecture_web(source)

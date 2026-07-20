@@ -7,6 +7,8 @@ pandas>=2.0
 requests>=2.31.0,<3
 openpyxl
 psycopg2-binary
+sqlalchemy
+plotly>=5.18
 
 # MLOps (aligné avec le bloc 3)
 mlflow==3.5.0
